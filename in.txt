@@ -14,13 +14,18 @@ func null fizzbuzz: int n {
 
         println result;
     }
-
-   return null;
 }
 
 func int main: string[] args, bool debug {
-    let float time = time.now.();
-    cll fizzbuzz.(100);
-    updt time = time.now.() - time;
-    println f"Time: {time}";
+    let str input = "";
+    readln input;
+
+    if debug {
+        let float time = time.now.();
+        cll fizzbuzz.(args.[0]);
+        updt time = time.now.() - time;
+        println f"Time: {time}";
+    } else {
+        cll fizzbuzz.(args.[0]);
+    }
 }

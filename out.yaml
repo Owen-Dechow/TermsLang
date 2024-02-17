@@ -1,5 +1,5 @@
     Finished dev [unoptimized + debuginfo] target(s) in 0.00s
-     Running `target/debug/prog`
+     Running `target/debug/terms`
 [src/main.rs:30] block = Block {
     terms: [
         Func {
@@ -328,7 +328,7 @@
                                                                 kind: Identity(
                                                                     Token(
                                                                         Identity(
-                                                                            "str",
+                                                                            "@str",
                                                                         ),
                                                                     ),
                                                                 ),
@@ -340,68 +340,7 @@
                                                                                 args: [],
                                                                             },
                                                                         ),
-                                                                        sub: Some(
-                                                                            Object {
-                                                                                kind: Identity(
-                                                                                    Token(
-                                                                                        Identity(
-                                                                                            "test",
-                                                                                        ),
-                                                                                    ),
-                                                                                ),
-                                                                                sub: Some(
-                                                                                    Object {
-                                                                                        kind: Index(
-                                                                                            Index(
-                                                                                                [
-                                                                                                    Binary {
-                                                                                                        operand: Token(
-                                                                                                            Operator(
-                                                                                                                Add,
-                                                                                                            ),
-                                                                                                        ),
-                                                                                                        left: Literal(
-                                                                                                            Token(
-                                                                                                                Int(
-                                                                                                                    45,
-                                                                                                                ),
-                                                                                                            ),
-                                                                                                        ),
-                                                                                                        right: Literal(
-                                                                                                            Token(
-                                                                                                                Int(
-                                                                                                                    78,
-                                                                                                                ),
-                                                                                                            ),
-                                                                                                        ),
-                                                                                                    },
-                                                                                                ],
-                                                                                            ),
-                                                                                        ),
-                                                                                        sub: Some(
-                                                                                            Object {
-                                                                                                kind: Index(
-                                                                                                    Index(
-                                                                                                        [],
-                                                                                                    ),
-                                                                                                ),
-                                                                                                sub: Some(
-                                                                                                    Object {
-                                                                                                        kind: Call(
-                                                                                                            Call {
-                                                                                                                typeargs: [],
-                                                                                                                args: [],
-                                                                                                            },
-                                                                                                        ),
-                                                                                                        sub: None,
-                                                                                                    },
-                                                                                                ),
-                                                                                            },
-                                                                                        ),
-                                                                                    },
-                                                                                ),
-                                                                            },
-                                                                        ),
+                                                                        sub: None,
                                                                     },
                                                                 ),
                                                             },
@@ -432,20 +371,6 @@
                                 },
                             ],
                         },
-                    },
-                    Return {
-                        value: Object(
-                            Object {
-                                kind: Identity(
-                                    Token(
-                                        Identity(
-                                            "null",
-                                        ),
-                                    ),
-                                ),
-                                sub: None,
-                            },
-                        ),
                     },
                 ],
             },
@@ -537,7 +462,7 @@
                             kind: Identity(
                                 Token(
                                     Identity(
-                                        "time",
+                                        "input",
                                     ),
                                 ),
                             ),
@@ -548,7 +473,7 @@
                                 kind: Identity(
                                     Token(
                                         Identity(
-                                            "float",
+                                            "str",
                                         ),
                                     ),
                                 ),
@@ -557,160 +482,43 @@
                             array: Not,
                             associated_types: [],
                         },
-                        value: Object(
-                            Object {
-                                kind: Identity(
-                                    Token(
-                                        Identity(
-                                            "time",
-                                        ),
-                                    ),
+                        value: Literal(
+                            Token(
+                                String(
+                                    "\"",
                                 ),
-                                sub: Some(
-                                    Object {
-                                        kind: Identity(
-                                            Token(
-                                                Identity(
-                                                    "now",
-                                                ),
-                                            ),
-                                        ),
-                                        sub: Some(
-                                            Object {
-                                                kind: Call(
-                                                    Call {
-                                                        typeargs: [],
-                                                        args: [],
-                                                    },
-                                                ),
-                                                sub: None,
-                                            },
-                                        ),
-                                    },
-                                ),
-                            },
+                            ),
                         ),
                     },
-                    Return {
-                        value: Object(
-                            Object {
-                                kind: Identity(
-                                    Token(
-                                        Identity(
-                                            "fizzbuzz",
-                                        ),
-                                    ),
-                                ),
-                                sub: Some(
-                                    Object {
-                                        kind: Call(
-                                            Call {
-                                                typeargs: [],
-                                                args: [
-                                                    Literal(
-                                                        Token(
-                                                            Int(
-                                                                100,
-                                                            ),
-                                                        ),
-                                                    ),
-                                                ],
-                                            },
-                                        ),
-                                        sub: None,
-                                    },
-                                ),
-                            },
-                        ),
-                    },
-                    UpdateVar {
+                    ReadLn {
                         var: Object {
                             kind: Identity(
                                 Token(
                                     Identity(
-                                        "time",
+                                        "input",
                                     ),
                                 ),
                             ),
                             sub: None,
                         },
-                        set_operator: Set,
-                        value: Binary {
-                            operand: Token(
-                                Operator(
-                                    Subtract,
-                                ),
-                            ),
-                            left: Object(
-                                Object {
-                                    kind: Identity(
-                                        Token(
-                                            Identity(
-                                                "time",
-                                            ),
-                                        ),
-                                    ),
-                                    sub: Some(
-                                        Object {
-                                            kind: Identity(
-                                                Token(
-                                                    Identity(
-                                                        "now",
-                                                    ),
-                                                ),
-                                            ),
-                                            sub: Some(
-                                                Object {
-                                                    kind: Call(
-                                                        Call {
-                                                            typeargs: [],
-                                                            args: [],
-                                                        },
-                                                    ),
-                                                    sub: None,
-                                                },
-                                            ),
-                                        },
-                                    ),
-                                },
-                            ),
-                            right: Object(
-                                Object {
-                                    kind: Identity(
-                                        Token(
-                                            Identity(
-                                                "time",
-                                            ),
-                                        ),
-                                    ),
-                                    sub: None,
-                                },
-                            ),
-                        },
                     },
-                    Print {
-                        ln: true,
-                        operand_block: Binary {
-                            operand: Token(
-                                Operator(
-                                    Add,
-                                ),
-                            ),
-                            left: Literal(
-                                Token(
-                                    String(
-                                        "Time: ",
+                    If {
+                        conditional: Object(
+                            Object {
+                                kind: Identity(
+                                    Token(
+                                        Identity(
+                                            "debug",
+                                        ),
                                     ),
                                 ),
-                            ),
-                            right: Binary {
-                                operand: Token(
-                                    Operator(
-                                        Add,
-                                    ),
-                                ),
-                                left: Object(
-                                    Object {
+                                sub: None,
+                            },
+                        ),
+                        block: Block {
+                            terms: [
+                                DeclareVar {
+                                    name: Object {
                                         kind: Identity(
                                             Token(
                                                 Identity(
@@ -720,15 +528,275 @@
                                         ),
                                         sub: None,
                                     },
-                                ),
-                                right: Literal(
-                                    Token(
-                                        String(
-                                            "",
-                                        ),
+                                    vartype: Type {
+                                        object: Object {
+                                            kind: Identity(
+                                                Token(
+                                                    Identity(
+                                                        "float",
+                                                    ),
+                                                ),
+                                            ),
+                                            sub: None,
+                                        },
+                                        array: Not,
+                                        associated_types: [],
+                                    },
+                                    value: Object(
+                                        Object {
+                                            kind: Identity(
+                                                Token(
+                                                    Identity(
+                                                        "time",
+                                                    ),
+                                                ),
+                                            ),
+                                            sub: Some(
+                                                Object {
+                                                    kind: Identity(
+                                                        Token(
+                                                            Identity(
+                                                                "now",
+                                                            ),
+                                                        ),
+                                                    ),
+                                                    sub: Some(
+                                                        Object {
+                                                            kind: Call(
+                                                                Call {
+                                                                    typeargs: [],
+                                                                    args: [],
+                                                                },
+                                                            ),
+                                                            sub: None,
+                                                        },
+                                                    ),
+                                                },
+                                            ),
+                                        },
                                     ),
-                                ),
-                            },
+                                },
+                                Return {
+                                    value: Object(
+                                        Object {
+                                            kind: Identity(
+                                                Token(
+                                                    Identity(
+                                                        "fizzbuzz",
+                                                    ),
+                                                ),
+                                            ),
+                                            sub: Some(
+                                                Object {
+                                                    kind: Call(
+                                                        Call {
+                                                            typeargs: [],
+                                                            args: [
+                                                                Object(
+                                                                    Object {
+                                                                        kind: Identity(
+                                                                            Token(
+                                                                                Identity(
+                                                                                    "args",
+                                                                                ),
+                                                                            ),
+                                                                        ),
+                                                                        sub: Some(
+                                                                            Object {
+                                                                                kind: Index(
+                                                                                    Index(
+                                                                                        [
+                                                                                            Literal(
+                                                                                                Token(
+                                                                                                    Int(
+                                                                                                        0,
+                                                                                                    ),
+                                                                                                ),
+                                                                                            ),
+                                                                                        ],
+                                                                                    ),
+                                                                                ),
+                                                                                sub: None,
+                                                                            },
+                                                                        ),
+                                                                    },
+                                                                ),
+                                                            ],
+                                                        },
+                                                    ),
+                                                    sub: None,
+                                                },
+                                            ),
+                                        },
+                                    ),
+                                },
+                                UpdateVar {
+                                    var: Object {
+                                        kind: Identity(
+                                            Token(
+                                                Identity(
+                                                    "time",
+                                                ),
+                                            ),
+                                        ),
+                                        sub: None,
+                                    },
+                                    set_operator: Set,
+                                    value: Binary {
+                                        operand: Token(
+                                            Operator(
+                                                Subtract,
+                                            ),
+                                        ),
+                                        left: Object(
+                                            Object {
+                                                kind: Identity(
+                                                    Token(
+                                                        Identity(
+                                                            "time",
+                                                        ),
+                                                    ),
+                                                ),
+                                                sub: Some(
+                                                    Object {
+                                                        kind: Identity(
+                                                            Token(
+                                                                Identity(
+                                                                    "now",
+                                                                ),
+                                                            ),
+                                                        ),
+                                                        sub: Some(
+                                                            Object {
+                                                                kind: Call(
+                                                                    Call {
+                                                                        typeargs: [],
+                                                                        args: [],
+                                                                    },
+                                                                ),
+                                                                sub: None,
+                                                            },
+                                                        ),
+                                                    },
+                                                ),
+                                            },
+                                        ),
+                                        right: Object(
+                                            Object {
+                                                kind: Identity(
+                                                    Token(
+                                                        Identity(
+                                                            "time",
+                                                        ),
+                                                    ),
+                                                ),
+                                                sub: None,
+                                            },
+                                        ),
+                                    },
+                                },
+                                Print {
+                                    ln: true,
+                                    operand_block: Binary {
+                                        operand: Token(
+                                            Operator(
+                                                Add,
+                                            ),
+                                        ),
+                                        left: Literal(
+                                            Token(
+                                                String(
+                                                    "Time: ",
+                                                ),
+                                            ),
+                                        ),
+                                        right: Binary {
+                                            operand: Token(
+                                                Operator(
+                                                    Add,
+                                                ),
+                                            ),
+                                            left: Object(
+                                                Object {
+                                                    kind: Identity(
+                                                        Token(
+                                                            Identity(
+                                                                "time",
+                                                            ),
+                                                        ),
+                                                    ),
+                                                    sub: None,
+                                                },
+                                            ),
+                                            right: Literal(
+                                                Token(
+                                                    String(
+                                                        "",
+                                                    ),
+                                                ),
+                                            ),
+                                        },
+                                    },
+                                },
+                            ],
+                        },
+                        else_block: Block {
+                            terms: [
+                                Return {
+                                    value: Object(
+                                        Object {
+                                            kind: Identity(
+                                                Token(
+                                                    Identity(
+                                                        "fizzbuzz",
+                                                    ),
+                                                ),
+                                            ),
+                                            sub: Some(
+                                                Object {
+                                                    kind: Call(
+                                                        Call {
+                                                            typeargs: [],
+                                                            args: [
+                                                                Object(
+                                                                    Object {
+                                                                        kind: Identity(
+                                                                            Token(
+                                                                                Identity(
+                                                                                    "args",
+                                                                                ),
+                                                                            ),
+                                                                        ),
+                                                                        sub: Some(
+                                                                            Object {
+                                                                                kind: Index(
+                                                                                    Index(
+                                                                                        [
+                                                                                            Literal(
+                                                                                                Token(
+                                                                                                    Int(
+                                                                                                        0,
+                                                                                                    ),
+                                                                                                ),
+                                                                                            ),
+                                                                                        ],
+                                                                                    ),
+                                                                                ),
+                                                                                sub: None,
+                                                                            },
+                                                                        ),
+                                                                    },
+                                                                ),
+                                                            ],
+                                                        },
+                                                    ),
+                                                    sub: None,
+                                                },
+                                            ),
+                                        },
+                                    ),
+                                },
+                            ],
                         },
                     },
                 ],

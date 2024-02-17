@@ -134,6 +134,9 @@ pub enum Term {
         conditional: OperandExpression,
         block: Box<Term>,
     },
+    ReadLn {
+        var: Object,
+    },
     Break,
     Continue,
 }
@@ -443,6 +446,24 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
         return Ok(Term::Return {
             value: parse_operand_block(token_stream, vec![TokenType::Terminate])?,
         });
+    }
+
+    // Parse readln
+    if let Token(TokenType::KewWord(KeyWord::ReadLn), ..) = lead_token {
+        let var = parse_object_peekable(token_stream)?;
+
+        return match token_stream.advance() {
+            Some(token) => match token.0 {
+                TokenType::Terminate => Ok(Term::ReadLn { var }),
+                _ => {
+                    return Err(SyntaxError(
+                        "Unexpected token at after continue".to_string(),
+                        Some(token.1.clone()),
+                    ))
+                }
+            },
+            None => return Err(SyntaxError("Expected line terminator".to_string(), None)),
+        };
     }
 
     return Err(SyntaxError(
