@@ -1,0 +1,26 @@
+func null fizzbuzz: int n {
+    loop i: i < n {
+        let str result = "";
+
+        if i % 3 == 0 {
+            updt result += "Fizz";
+        }
+        if i % 5 == 0 {
+            updt result += "Buzz";
+        }
+        if result == "" {
+            updt result = i.@str.();
+        }
+
+        println result;
+    }
+
+   return null;
+}
+
+func int main: string[] args, bool debug {
+    let float time = time.now.();
+    cll fizzbuzz.(100);
+    updt time = time.now.() - time;
+    println f"Time: {time}";
+}
