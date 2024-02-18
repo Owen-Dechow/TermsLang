@@ -6,3 +6,4 @@ cd output
 cargo build
 cd ..
 cp target/debug/output ./a
+rm -rf output
