@@ -1,11 +1,5 @@
-func null test: {
-    return null;
-}
-
 func null main: str[] args {
-    loop i: i < 100000000 {
+    loop i: i < 10000000 {
         cll i * i;
     }
-
-    println test.();
 }

@@ -1,7 +1,7 @@
 #[derive(Debug, Clone, PartialEq)]
 pub struct str(pub String);
 
-// Implement the Display trait to allow printing MSTR
+// Implement the Display trait to allow printing str
 impl std::fmt::Display for str {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.0)
