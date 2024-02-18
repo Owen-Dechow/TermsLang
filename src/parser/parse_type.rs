@@ -4,55 +4,9 @@ use crate::{
 };
 
 use super::{
-    parse_identity::{parse_object, parse_object_peekable},
-    parse_operand_block::{parse_operand_block, OperandExpression},
-    Array, Index, Object, TokenStream, Type, VarSigniture,
+    parse_object::{parse_object, parse_object_peekable},
+    Object, TokenStream, Type, VarSigniture,
 };
-
-// Parse function call
-fn get_matrix_sizing(token_stream: &mut TokenStream) -> Result<Index, SyntaxError> {
-    match token_stream.advance() {
-        Some(Token(TokenType::Operator(Operator::OpenBracket), ..)) => {}
-        Some(token) => {
-            return Err(SyntaxError(
-                "Unexpected token in matrix sizing".to_string(),
-                Some(token.1.clone()),
-            ))
-        }
-        None => {
-            return Err(SyntaxError(
-                "Expected start of matrix size list".to_string(),
-                None,
-            ))
-        }
-    };
-
-    let mut indexes = Vec::<OperandExpression>::new();
-    loop {
-        // Add clause to check for empty list: ()
-        if let Some(Token(TokenType::Operator(Operator::CloseBracket), ..)) = token_stream.advance()
-        {
-            break;
-        }
-
-        token_stream.back();
-
-        indexes.push(parse_operand_block(
-            token_stream,
-            vec![
-                TokenType::Operator(Operator::CloseBracket),
-                TokenType::Operator(Operator::Comma),
-            ],
-        )?);
-
-        if let Some(Token(TokenType::Operator(Operator::CloseBracket), ..)) = token_stream.current()
-        {
-            break;
-        }
-    }
-
-    return Ok(Index(indexes));
-}
 
 // Get types within <>
 pub fn get_associated_types(token_stream: &mut TokenStream) -> Result<Vec<Type>, SyntaxError> {
@@ -131,9 +85,8 @@ pub fn parse_type(token_stream: &mut TokenStream) -> Result<Type, SyntaxError> {
     let next = match token_stream.advance() {
         Some(next) => next,
         None => {
-            return Ok(Type {
+            return Ok(Type::Object {
                 object: typename,
-                array: Array::Not,
                 associated_types: Vec::<Type>::new(),
             });
         }
@@ -149,42 +102,29 @@ pub fn parse_type(token_stream: &mut TokenStream) -> Result<Type, SyntaxError> {
         }
     };
 
-    // pull the next token to check for arrays/matrices
-    let next = match token_stream.advance() {
-        Some(next) => next,
-        None => {
-            token_stream.back();
-            return Ok(Type {
-                object: typename,
-                array: Array::Not,
-                associated_types,
-            });
-        }
+    let mut _type = Type::Object {
+        object: typename,
+        associated_types,
     };
 
-    // Check if type is matrix else return type
-    if let Token(TokenType::Operator(Operator::OpenBracket), ..) = next {
-        token_stream.back();
-        let matrix_sizing = get_matrix_sizing(token_stream)?;
-        let array = if matrix_sizing.0.len() == 0 {
-            Array::Normal
-        } else {
-            Array::Matrix(matrix_sizing)
-        };
-
-        return Ok(Type {
-            object: typename,
-            array,
-            associated_types,
-        });
-    } else {
-        _ = token_stream.back();
-        return Ok(Type {
-            object: typename,
-            array: Array::Not,
-            associated_types,
-        });
+    // Wrap matrix
+    while let Some(Token(TokenType::Operator(Operator::OpenBracket), ..)) = token_stream.advance() {
+        match token_stream.advance() {
+            Some(Token(TokenType::Operator(Operator::CloseBracket), ..)) => {
+                _type = Type::Array(Box::new(_type));
+            }
+            Some(token) => {
+                return Err(SyntaxError(
+                    "Unexpected token instead of closing bracket".to_string(),
+                    Some(token.1.clone()),
+                ))
+            }
+            None => return Err(SyntaxError("Expected closing bracket".to_string(), None)),
+        }
     }
+
+    token_stream.back();
+    return Ok(_type);
 }
 
 // Gen variable signiture: type<>[] name

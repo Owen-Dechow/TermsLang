@@ -73,6 +73,8 @@ pub enum Operator {
     Dot,
     Colon,
     Comma,
+
+    New,
 }
 
 impl Display for Operator {

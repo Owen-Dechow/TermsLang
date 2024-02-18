@@ -52,6 +52,7 @@ pub fn get_syntax_map() -> SyntaxMap<'static> {
             (".", Operator::Dot),
             (":", Operator::Colon),
             (",", Operator::Comma),
+            ("$", Operator::New),
         ]),
         keywords: HashMap::<&str, KeyWord>::from([
             ("print", KeyWord::Print),

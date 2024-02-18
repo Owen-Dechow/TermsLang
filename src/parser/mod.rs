@@ -4,17 +4,17 @@ use crate::{
 };
 
 use self::{
-    parse_identity::{parse_object, parse_object_peekable},
+    parse_object::{parse_object, parse_object_peekable},
     parse_operand_block::{parse_operand_block, OperandExpression},
     parse_type::parse_type,
 };
 
-mod parse_identity;
-mod parse_operand_block;
-mod parse_type;
+pub mod parse_object;
+pub mod parse_operand_block;
+pub mod parse_type;
 
 #[derive(Debug)]
-struct TokenStream {
+pub struct TokenStream {
     ptr: usize,
     tokens: Vec<Token>,
 }
@@ -61,10 +61,12 @@ pub enum Array {
 }
 
 #[derive(Debug, Clone)]
-pub struct Type {
-    pub object: Object,
-    pub array: Array,
-    pub associated_types: Vec<Type>,
+pub enum Type {
+    Array(Box<Type>),
+    Object {
+        object: Object,
+        associated_types: Vec<Type>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -74,10 +76,16 @@ pub struct Object {
 }
 
 #[derive(Debug, Clone)]
+pub struct ObjectCreate {
+    pub kind: Type,
+    pub args: Call,
+}
+
+#[derive(Debug, Clone)]
 pub enum ObjectType {
     Identity(Token),
     Call(Call),
-    Index(Index),
+    Index(Box<OperandExpression>),
 }
 
 #[derive(Debug, Clone)]
@@ -139,6 +147,9 @@ pub enum Term {
     },
     Break,
     Continue,
+    Call {
+        value: OperandExpression,
+    },
 }
 
 // Parse single term
@@ -443,7 +454,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
 
     // Parse call
     if let Token(TokenType::KewWord(KeyWord::Call), ..) = lead_token {
-        return Ok(Term::Return {
+        return Ok(Term::Call {
             value: parse_operand_block(token_stream, vec![TokenType::Terminate])?,
         });
     }

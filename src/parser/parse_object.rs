@@ -6,7 +6,7 @@ use crate::{
 use super::{
     parse_operand_block::{parse_operand_block, OperandExpression},
     parse_type::parse_type,
-    Call, Index, Object, ObjectType, TokenStream, Type,
+    Call, Object, ObjectCreate, ObjectType, TokenStream, Type,
 };
 
 // Parse function call
@@ -86,46 +86,6 @@ fn parse_call(token_stream: &mut TokenStream) -> Result<Call, SyntaxError> {
     }
 
     return Ok(Call { typeargs, args });
-}
-
-// Parse function call
-fn parse_index(token_stream: &mut TokenStream) -> Result<Index, SyntaxError> {
-    match token_stream.advance() {
-        Some(Token(TokenType::Operator(Operator::OpenBracket), ..)) => {}
-        Some(token) => {
-            return Err(SyntaxError(
-                "Unexpected token in index".to_string(),
-                Some(token.1.clone()),
-            ))
-        }
-        None => return Err(SyntaxError("Expected start of index".to_string(), None)),
-    };
-
-    let mut indexes = Vec::<OperandExpression>::new();
-    loop {
-        // Add clause to check for empty list: ()
-        if let Some(Token(TokenType::Operator(Operator::CloseBracket), ..)) = token_stream.advance()
-        {
-            break;
-        }
-
-        token_stream.back();
-
-        indexes.push(parse_operand_block(
-            token_stream,
-            vec![
-                TokenType::Operator(Operator::CloseBracket),
-                TokenType::Operator(Operator::Comma),
-            ],
-        )?);
-
-        if let Some(Token(TokenType::Operator(Operator::CloseBracket), ..)) = token_stream.current()
-        {
-            break;
-        }
-    }
-
-    return Ok(Index(indexes));
 }
 
 // Parse identity object Nonpeekable, Noncallable
@@ -246,21 +206,24 @@ pub fn parse_object_peekable_callable(
                 }
             }
             TokenType::Operator(Operator::OpenBracket) => {
-                token_stream.back();
-                let indexing = parse_index(token_stream)?;
+                let index = parse_operand_block(
+                    token_stream,
+                    vec![TokenType::Operator(Operator::CloseBracket)],
+                )?;
+
                 match token_stream.advance() {
                     Some(Token(TokenType::Operator(Operator::Dot), ..)) => {
                         return Ok(Object {
-                            kind: ObjectType::Index(indexing),
+                            kind: ObjectType::Index(Box::new(index)),
                             sub: Some(Box::new(parse_object_peekable_callable(token_stream)?)),
                         });
                     }
                     _ => {
                         token_stream.back();
-                        return Ok(Object {
-                            kind: ObjectType::Index(indexing),
+                        Ok(Object {
+                            kind: ObjectType::Index(Box::new(index)),
                             sub: None,
-                        });
+                        })
                     }
                 }
             }
@@ -273,4 +236,37 @@ pub fn parse_object_peekable_callable(
         },
         None => return Err(SyntaxError("Expected identity".to_string(), None)),
     }
+}
+
+pub fn parse_object_create(token_stream: &mut TokenStream) -> Result<ObjectCreate, SyntaxError> {
+    match token_stream.advance() {
+        Some(Token(TokenType::Operator(Operator::New), ..)) => {}
+        Some(token) => {
+            return Err(SyntaxError(
+                "Unexpected token in object creation".to_string(),
+                Some(token.1.clone()),
+            ))
+        }
+        None => return Err(SyntaxError("Expected creation operator".to_string(), None)),
+    };
+
+    let type_ = parse_type(token_stream)?;
+
+    match token_stream.advance() {
+        Some(Token(TokenType::Operator(Operator::Dot), ..)) => {}
+        Some(Token(_, pos)) => {
+            return Err(SyntaxError(
+                "Unexpected token in place of creation call ".to_string(),
+                Some(pos.clone()),
+            ))
+        }
+        None => return Err(SyntaxError("Expected creation call".to_string(), None)),
+    };
+
+    let call = parse_call(token_stream)?;
+
+    return Ok(ObjectCreate {
+        kind: type_,
+        args: call,
+    });
 }

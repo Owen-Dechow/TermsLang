@@ -3,7 +3,10 @@ use crate::{
     lexer::tokens::{Operator, Token, TokenType},
 };
 
-use super::{parse_identity::parse_object_peekable_callable, Object, TokenStream};
+use super::{
+    parse_object::{parse_object_create, parse_object_peekable_callable},
+    Object, ObjectCreate, TokenStream,
+};
 
 #[derive(Debug, Clone)]
 pub enum OperandExpression {
@@ -18,6 +21,7 @@ pub enum OperandExpression {
     },
     Literal(Token),
     Object(Object),
+    Create(ObjectCreate),
 }
 
 #[derive(Debug, Clone)]
@@ -25,6 +29,7 @@ enum OperandComponent {
     Object(Object),
     Literal(Token),
     Operand(Token),
+    Create(ObjectCreate),
 }
 
 fn get_precedent_map() -> Vec<Vec<Operator>> {
@@ -76,6 +81,7 @@ fn parse_slice(
                 return Ok(OperandExpression::Literal(value.clone()))
             }
             OperandComponent::Object(value) => return Ok(OperandExpression::Object(value.clone())),
+            OperandComponent::Create(value) => return Ok(OperandExpression::Create(value.clone())),
             OperandComponent::Operand(token) => {
                 return Err(SyntaxError(
                     "Unexpected operator where value should be found".to_string(),
@@ -246,6 +252,10 @@ pub fn parse_operand_block(
                 TokenType::Identity(..) => {
                     token_stream.back();
                     OperandComponent::Object(parse_object_peekable_callable(token_stream)?)
+                }
+                TokenType::Operator(Operator::New) => {
+                    token_stream.back();
+                    OperandComponent::Create(parse_object_create(token_stream)?)
                 }
                 TokenType::Operator(..) => OperandComponent::Operand(token.clone()),
                 _ => {

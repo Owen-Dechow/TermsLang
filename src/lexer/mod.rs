@@ -124,7 +124,6 @@ fn handel_char(
             // Check for string
             if STRING_QUOTES.contains(c) {
                 section.state = SectionState::String(c, StringInterpolator::None);
-                section.content.push(c);
                 return Ok(());
             }
 

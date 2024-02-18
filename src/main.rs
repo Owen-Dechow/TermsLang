@@ -26,18 +26,12 @@ fn main() {
     let parse_out = parser::parse(lex_out);
 
     match &parse_out {
-        Ok(block) => {
-            dbg!(block);
-        }
-        Err(err) => {
-            println!("{}", err.prettify(&program));
-            panic!("{}", err.prettify(&program));
-        }
-    }
-    match &parse_out {
-        Ok(block) => {
-            println!("{}", transpiler::transpile(block));
-        }
+        Ok(block) => match transpiler::transpile(block) {
+            Ok(out) => {
+                let _ = fs::write("output/src/main.rs", out);
+            }
+            Err(err) => panic!("{}", err.prettify(&program)),
+        },
         Err(err) => {
             println!("{}", err.prettify(&program));
             panic!("{}", err.prettify(&program));
