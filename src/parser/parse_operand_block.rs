@@ -52,19 +52,18 @@ fn get_precedent_map() -> Vec<Vec<Operator>> {
 
 fn remove_extra_paren(slice: &mut Vec<OperandComponent>) {
     match slice.first() {
-        Some(OperandComponent::Operand(Token(TokenType::Operator(Operator::OpenParen), ..))) => {}
+        Some(OperandComponent::Operand(Token(TokenType::Operator(Operator::OpenParen), _))) => {}
         _ => return,
     };
 
     let mut depth = 0;
     for (idx, token) in slice.iter().enumerate() {
-        if let OperandComponent::Operand(Token(TokenType::Operator(Operator::OpenParen), ..)) =
-            token
+        if let OperandComponent::Operand(Token(TokenType::Operator(Operator::OpenParen), _)) = token
         {
             depth += 1;
         }
 
-        if let OperandComponent::Operand(Token(TokenType::Operator(Operator::CloseParen), ..)) =
+        if let OperandComponent::Operand(Token(TokenType::Operator(Operator::CloseParen), _)) =
             token
         {
             depth -= 1;
@@ -109,7 +108,7 @@ fn parse_slice(
     // Loop over to split on operators
     for (president_idx, president_layer) in president_map.into_iter().enumerate() {
         for (operand_component_idx, operand_component) in slice.clone().into_iter().enumerate() {
-            if let OperandComponent::Operand(Token(TokenType::Operator(Operator::OpenParen), ..)) =
+            if let OperandComponent::Operand(Token(TokenType::Operator(Operator::OpenParen), _)) =
                 operand_component
             {
                 paren_depth += 1;
@@ -134,13 +133,13 @@ fn parse_slice(
                 continue;
             }
 
-            if let OperandComponent::Literal(..) = operand_component {
+            if let OperandComponent::Literal(_) = operand_component {
                 continue;
             }
 
             if paren_depth == 0 {
                 if let OperandComponent::Operand(ref operand_token) = operand_component {
-                    if let Token(TokenType::Operator(operator), ..) = operand_token {
+                    if let Token(TokenType::Operator(operator), _) = operand_token {
                         if president_layer.contains(&operator) {
                             if president_idx == president_map.len() - 1 {
                                 let slice = match slice.get(operand_component_idx + 1..) {
@@ -261,10 +260,10 @@ pub fn parse_operand_block(
             }
 
             let translated_token = match token.0 {
-                TokenType::Int(..) => OperandComponent::Literal(token.clone()),
-                TokenType::Float(..) => OperandComponent::Literal(token.clone()),
-                TokenType::String(..) => OperandComponent::Literal(token.clone()),
-                TokenType::Identity(..) => {
+                TokenType::Int(_) => OperandComponent::Literal(token.clone()),
+                TokenType::Float(_) => OperandComponent::Literal(token.clone()),
+                TokenType::String(_) => OperandComponent::Literal(token.clone()),
+                TokenType::Identity(_) => {
                     token_stream.back();
                     OperandComponent::Object(parse_object_peekable_callable(token_stream)?)
                 }
@@ -272,7 +271,7 @@ pub fn parse_operand_block(
                     token_stream.back();
                     OperandComponent::Create(parse_object_create(token_stream)?)
                 }
-                TokenType::Operator(..) => OperandComponent::Operand(token.clone()),
+                TokenType::Operator(_) => OperandComponent::Operand(token.clone()),
                 _ => {
                     return Err(ParserError(
                         "Unexpected token in operand block".to_string(),

@@ -155,7 +155,7 @@ pub enum Term {
 // Parse single term
 fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term, ParserError> {
     // Parse function
-    if let Token(TokenType::KewWord(KeyWord::Func), ..) = lead_token {
+    if let Token(TokenType::KewWord(KeyWord::Func), _) = lead_token {
         // Get return type of function
         let returntype = parse_type::parse_type(token_stream)?;
 
@@ -164,7 +164,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
 
         // Burn identity arg separator in function signiture
         match token_stream.advance() {
-            Some(Token(TokenType::Operator(Operator::Colon), ..)) => {}
+            Some(Token(TokenType::Operator(Operator::Colon), _)) => {}
             Some(token) => {
                 return Err(ParserError(
                     "Unexpected token in function signiture".to_string(),
@@ -183,7 +183,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
         let typeargs = {
             match token_stream.advance() {
                 // Return found type args
-                Some(Token(TokenType::Operator(Operator::Less), ..)) => {
+                Some(Token(TokenType::Operator(Operator::Less), _)) => {
                     parse_type::get_type_args(token_stream)?
                 }
                 _ => {
@@ -208,7 +208,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                 };
 
                 // If state of function block found exit loop
-                if let Token(TokenType::Operator(Operator::OpenBlock), ..) = token {
+                if let Token(TokenType::Operator(Operator::OpenBlock), _) = token {
                     break;
                 }
 
@@ -220,8 +220,8 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
 
                 // Check if arg list continues or start of block found else return syntax error
                 match token_stream.advance() {
-                    Some(Token(TokenType::Operator(Operator::OpenBlock), ..)) => break,
-                    Some(Token(TokenType::Operator(Operator::Comma), ..)) => continue,
+                    Some(Token(TokenType::Operator(Operator::OpenBlock), _)) => break,
+                    Some(Token(TokenType::Operator(Operator::Comma), _)) => continue,
                     Some(token) => {
                         return Err(ParserError(
                             "Unexpected token in function signiture".to_string(),
@@ -253,7 +253,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
     }
 
     // Parse print
-    if let Token(TokenType::KewWord(KeyWord::Print), ..) = lead_token {
+    if let Token(TokenType::KewWord(KeyWord::Print), _) = lead_token {
         return Ok(Term::Print {
             ln: false,
             operand_block: parse_operand_block(token_stream, vec![TokenType::Terminate])?,
@@ -261,7 +261,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
     }
 
     // Parse println
-    if let Token(TokenType::KewWord(KeyWord::PrintLn), ..) = lead_token {
+    if let Token(TokenType::KewWord(KeyWord::PrintLn), _) = lead_token {
         return Ok(Term::Print {
             ln: true,
             operand_block: parse_operand_block(token_stream, vec![TokenType::Terminate])?,
@@ -269,12 +269,12 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
     }
 
     // Parse var declaration
-    if let Token(TokenType::KewWord(KeyWord::Var), ..) = lead_token {
+    if let Token(TokenType::KewWord(KeyWord::Var), _) = lead_token {
         let vartype = parse_type(token_stream)?;
         let name = parse_object(token_stream)?;
 
         match token_stream.advance() {
-            Some(Token(TokenType::Operator(Operator::Set), ..)) => {}
+            Some(Token(TokenType::Operator(Operator::Set), _)) => {}
             Some(Token(_, pos)) => {
                 return Err(ParserError(
                     "Invalid token expected set operator".to_string(),
@@ -294,14 +294,14 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
     }
 
     // Parse return
-    if let Token(TokenType::KewWord(KeyWord::Return), ..) = lead_token {
+    if let Token(TokenType::KewWord(KeyWord::Return), _) = lead_token {
         return Ok(Term::Return {
             value: parse_operand_block(token_stream, vec![TokenType::Terminate])?,
         });
     }
 
     // Parse var update
-    if let Token(TokenType::KewWord(KeyWord::UpdateVar), ..) = lead_token {
+    if let Token(TokenType::KewWord(KeyWord::UpdateVar), _) = lead_token {
         let var = parse_object_peekable(token_stream)?;
 
         let set_operator = match token_stream.advance() {
@@ -345,19 +345,19 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
     }
 
     // Parse if block
-    if let Token(TokenType::KewWord(KeyWord::If), ..) = lead_token {
+    if let Token(TokenType::KewWord(KeyWord::If), _) = lead_token {
         let conditional =
             parse_operand_block(token_stream, vec![TokenType::Operator(Operator::OpenBlock)])?;
         token_stream.back();
         let block = parse_block(token_stream, false)?;
 
         let else_block = match token_stream.advance() {
-            Some(Token(TokenType::KewWord(KeyWord::Else), ..)) => match token_stream.advance() {
+            Some(Token(TokenType::KewWord(KeyWord::Else), _)) => match token_stream.advance() {
                 Some(token) => match token {
-                    Token(TokenType::KewWord(KeyWord::If), ..) => {
+                    Token(TokenType::KewWord(KeyWord::If), _) => {
                         parse_term(token.clone(), token_stream)?
                     }
-                    Token(TokenType::Operator(Operator::OpenBlock), ..) => {
+                    Token(TokenType::Operator(Operator::OpenBlock), _) => {
                         token_stream.back();
                         parse_block(token_stream, false)?
                     }
@@ -386,12 +386,12 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
     }
 
     // Parse loop
-    if let Token(TokenType::KewWord(KeyWord::Loop), ..) = lead_token {
+    if let Token(TokenType::KewWord(KeyWord::Loop), _) = lead_token {
         let counter = parse_object(token_stream)?;
 
         // Burn var conditional seperator
         match token_stream.advance() {
-            Some(Token(TokenType::Operator(Operator::Colon), ..)) => {}
+            Some(Token(TokenType::Operator(Operator::Colon), _)) => {}
             Some(token) => {
                 return Err(ParserError(
                     "Unexpected token in loop signiture".to_string(),
@@ -421,7 +421,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
     }
 
     // Parse break
-    if let Token(TokenType::KewWord(KeyWord::Break), ..) = lead_token {
+    if let Token(TokenType::KewWord(KeyWord::Break), _) = lead_token {
         return match token_stream.advance() {
             Some(token) => match token.0 {
                 TokenType::Terminate => Ok(Term::Break),
@@ -437,7 +437,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
     }
 
     // Parse continue
-    if let Token(TokenType::KewWord(KeyWord::Continue), ..) = lead_token {
+    if let Token(TokenType::KewWord(KeyWord::Continue), _) = lead_token {
         return match token_stream.advance() {
             Some(token) => match token.0 {
                 TokenType::Terminate => Ok(Term::Continue),
@@ -453,14 +453,14 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
     }
 
     // Parse call
-    if let Token(TokenType::KewWord(KeyWord::Call), ..) = lead_token {
+    if let Token(TokenType::KewWord(KeyWord::Call), _) = lead_token {
         return Ok(Term::Call {
             value: parse_operand_block(token_stream, vec![TokenType::Terminate])?,
         });
     }
 
     // Parse readln
-    if let Token(TokenType::KewWord(KeyWord::ReadLn), ..) = lead_token {
+    if let Token(TokenType::KewWord(KeyWord::ReadLn), _) = lead_token {
         let var = parse_object_peekable(token_stream)?;
 
         return match token_stream.advance() {
@@ -476,6 +476,9 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             None => return Err(ParserError("Expected line terminator".to_string(), None)),
         };
     }
+
+    // Parse class
+    if let Token(TokenType::KewWord(KeyWord::Class), _) = lead_token {}
 
     return Err(ParserError(
         "Unrecognized term".to_string(),
@@ -496,7 +499,7 @@ fn parse_block(
             }
         } else {
             match token_stream.advance() {
-                Some(Token(TokenType::Operator(Operator::OpenBlock), ..)) => Term::Block {
+                Some(Token(TokenType::Operator(Operator::OpenBlock), _)) => Term::Block {
                     terms: Vec::<Term>::new(),
                 },
                 Some(token) => {
@@ -516,7 +519,7 @@ fn parse_block(
         while let Some(t) = token_stream.advance().cloned() {
             // Break loop if end of block found
             if !omit_block_tokens {
-                if let Token(TokenType::Operator(Operator::CloseBlock), ..) = t {
+                if let Token(TokenType::Operator(Operator::CloseBlock), _) = t {
                     break;
                 }
             }

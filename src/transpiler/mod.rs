@@ -100,7 +100,7 @@ fn transpile_object(object: &Object) -> Result<String, TranspilerError> {
 
     match &object.sub {
         Some(sub) => match sub.kind {
-            ObjectType::Identity(..) => {
+            ObjectType::Identity(_) => {
                 return Ok(format!("{}.{}", result, transpile_object(&sub)?))
             }
             _ => return Ok(format!("{}{}", result, transpile_object(&sub)?)),

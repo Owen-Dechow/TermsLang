@@ -12,7 +12,7 @@ use super::{
 // Parse function call
 fn parse_call(token_stream: &mut TokenStream) -> Result<Call, ParserError> {
     match token_stream.advance() {
-        Some(Token(TokenType::Operator(Operator::OpenParen), ..)) => {}
+        Some(Token(TokenType::Operator(Operator::OpenParen), _)) => {}
         Some(token) => {
             return Err(ParserError(
                 "Unexpected token in call arguments".to_string(),
@@ -28,10 +28,10 @@ fn parse_call(token_stream: &mut TokenStream) -> Result<Call, ParserError> {
     };
 
     let typeargs = match token_stream.advance() {
-        Some(Token(TokenType::Operator(Operator::Less), ..)) => {
+        Some(Token(TokenType::Operator(Operator::Less), _)) => {
             let mut typeargs = Vec::<Type>::new();
             loop {
-                if let Some(Token(TokenType::Operator(Operator::Greater), ..)) =
+                if let Some(Token(TokenType::Operator(Operator::Greater), _)) =
                     token_stream.advance()
                 {
                     break;
@@ -41,7 +41,7 @@ fn parse_call(token_stream: &mut TokenStream) -> Result<Call, ParserError> {
                 typeargs.push(parse_type(token_stream)?);
 
                 match token_stream.advance() {
-                    Some(Token(TokenType::Operator(Operator::Comma), ..)) => {}
+                    Some(Token(TokenType::Operator(Operator::Comma), _)) => {}
                     _ => {
                         token_stream.back();
                     }
@@ -66,7 +66,7 @@ fn parse_call(token_stream: &mut TokenStream) -> Result<Call, ParserError> {
     let mut args = Vec::<OperandExpression>::new();
     loop {
         // Add clause to check for empty list: ()
-        if let Some(Token(TokenType::Operator(Operator::CloseParen), ..)) = token_stream.advance() {
+        if let Some(Token(TokenType::Operator(Operator::CloseParen), _)) = token_stream.advance() {
             break;
         }
 
@@ -80,7 +80,7 @@ fn parse_call(token_stream: &mut TokenStream) -> Result<Call, ParserError> {
             ],
         )?);
 
-        if let Some(Token(TokenType::Operator(Operator::CloseParen), ..)) = token_stream.current() {
+        if let Some(Token(TokenType::Operator(Operator::CloseParen), _)) = token_stream.current() {
             break;
         }
     }
@@ -92,7 +92,7 @@ fn parse_call(token_stream: &mut TokenStream) -> Result<Call, ParserError> {
 pub fn parse_object(token_stream: &mut TokenStream) -> Result<Object, ParserError> {
     match token_stream.advance().cloned() {
         Some(token) => match token.0 {
-            TokenType::Identity(..) => match token_stream.advance() {
+            TokenType::Identity(_) => match token_stream.advance() {
                 Some(Token(TokenType::Operator(Operator::Dot), pos)) => {
                     return Err(ParserError(
                         "Cannot peek, call, or index identity at this location".to_string(),
@@ -122,16 +122,16 @@ pub fn parse_object(token_stream: &mut TokenStream) -> Result<Object, ParserErro
 pub fn parse_object_peekable(token_stream: &mut TokenStream) -> Result<Object, ParserError> {
     match token_stream.advance().cloned() {
         Some(token) => match token.0 {
-            TokenType::Identity(..) => match token_stream.advance().cloned() {
+            TokenType::Identity(_) => match token_stream.advance().cloned() {
                 Some(Token(TokenType::Operator(Operator::Dot), pos)) => {
                     match token_stream.advance() {
-                        Some(Token(TokenType::Operator(Operator::OpenBracket), ..)) => {
+                        Some(Token(TokenType::Operator(Operator::OpenBracket), _)) => {
                             return Err(ParserError(
                                 "Cannot call identity at this location".to_string(),
                                 Some(pos.clone()),
                             ))
                         }
-                        Some(Token(TokenType::Operator(Operator::OpenParen), ..)) => {
+                        Some(Token(TokenType::Operator(Operator::OpenParen), _)) => {
                             return Err(ParserError(
                                 "Cannot index identity at this location".to_string(),
                                 Some(pos.clone()),
@@ -171,8 +171,8 @@ pub fn parse_object_peekable_callable(
 ) -> Result<Object, ParserError> {
     match token_stream.advance().cloned() {
         Some(token) => match token.0 {
-            TokenType::Identity(..) => match token_stream.advance().cloned() {
-                Some(Token(TokenType::Operator(Operator::Dot), ..)) => {
+            TokenType::Identity(_) => match token_stream.advance().cloned() {
+                Some(Token(TokenType::Operator(Operator::Dot), _)) => {
                     return Ok(Object {
                         kind: ObjectType::Identity(token.clone()),
                         sub: Some(Box::new(parse_object_peekable_callable(token_stream)?)),
@@ -190,7 +190,7 @@ pub fn parse_object_peekable_callable(
                 token_stream.back();
                 let call = parse_call(token_stream)?;
                 match token_stream.advance() {
-                    Some(Token(TokenType::Operator(Operator::Dot), ..)) => {
+                    Some(Token(TokenType::Operator(Operator::Dot), _)) => {
                         return Ok(Object {
                             kind: ObjectType::Call(call),
                             sub: Some(Box::new(parse_object_peekable_callable(token_stream)?)),
@@ -212,7 +212,7 @@ pub fn parse_object_peekable_callable(
                 )?;
 
                 match token_stream.advance() {
-                    Some(Token(TokenType::Operator(Operator::Dot), ..)) => {
+                    Some(Token(TokenType::Operator(Operator::Dot), _)) => {
                         return Ok(Object {
                             kind: ObjectType::Index(Box::new(index)),
                             sub: Some(Box::new(parse_object_peekable_callable(token_stream)?)),
@@ -240,7 +240,7 @@ pub fn parse_object_peekable_callable(
 
 pub fn parse_object_create(token_stream: &mut TokenStream) -> Result<ObjectCreate, ParserError> {
     match token_stream.advance() {
-        Some(Token(TokenType::Operator(Operator::New), ..)) => {}
+        Some(Token(TokenType::Operator(Operator::New), _)) => {}
         Some(token) => {
             return Err(ParserError(
                 "Unexpected token in object creation".to_string(),
@@ -253,7 +253,7 @@ pub fn parse_object_create(token_stream: &mut TokenStream) -> Result<ObjectCreat
     let type_ = parse_type(token_stream)?;
 
     match token_stream.advance() {
-        Some(Token(TokenType::Operator(Operator::Dot), ..)) => {}
+        Some(Token(TokenType::Operator(Operator::Dot), _)) => {}
         Some(Token(_, pos)) => {
             return Err(ParserError(
                 "Unexpected token in place of creation call ".to_string(),

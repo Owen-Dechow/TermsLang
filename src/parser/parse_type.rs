@@ -15,7 +15,7 @@ pub fn get_associated_types(token_stream: &mut TokenStream) -> Result<Vec<Type>,
 
     loop {
         // Add clause to check for empty type list: <>
-        if let Some(Token(TokenType::Operator(Operator::Greater), ..)) = token_stream.advance() {
+        if let Some(Token(TokenType::Operator(Operator::Greater), _)) = token_stream.advance() {
             break;
         } else {
             token_stream.back();
@@ -29,8 +29,8 @@ pub fn get_associated_types(token_stream: &mut TokenStream) -> Result<Vec<Type>,
 
         // Check for , else if > break loop else return error
         match token_stream.advance() {
-            Some(Token(TokenType::Operator(Operator::Greater), ..)) => break,
-            Some(Token(TokenType::Operator(Operator::Comma), ..)) => continue,
+            Some(Token(TokenType::Operator(Operator::Greater), _)) => break,
+            Some(Token(TokenType::Operator(Operator::Comma), _)) => continue,
             Some(token) => {
                 return Err(ParserError(
                     "Unexpected token in associated type list".to_string(),
@@ -57,7 +57,7 @@ pub fn get_type_args(token_stream: &mut TokenStream) -> Result<Vec<Object>, Pars
 
     // Get args
     loop {
-        if let Some(Token(TokenType::Operator(Operator::Greater), ..)) = token_stream.advance() {
+        if let Some(Token(TokenType::Operator(Operator::Greater), _)) = token_stream.advance() {
             break;
         }
 
@@ -65,7 +65,7 @@ pub fn get_type_args(token_stream: &mut TokenStream) -> Result<Vec<Object>, Pars
         type_args.push(parse_object(token_stream)?);
 
         match token_stream.advance() {
-            Some(Token(TokenType::Operator(Operator::Comma), ..)) => {}
+            Some(Token(TokenType::Operator(Operator::Comma), _)) => {}
             _ => {
                 token_stream.back();
             }
@@ -94,7 +94,7 @@ pub fn parse_type(token_stream: &mut TokenStream) -> Result<Type, ParserError> {
 
     // check for associated types: <>
     let associated_types = {
-        if let Token(TokenType::Operator(Operator::Less), ..) = next {
+        if let Token(TokenType::Operator(Operator::Less), _) = next {
             get_associated_types(token_stream)?
         } else {
             token_stream.back();
@@ -108,9 +108,9 @@ pub fn parse_type(token_stream: &mut TokenStream) -> Result<Type, ParserError> {
     };
 
     // Wrap matrix
-    while let Some(Token(TokenType::Operator(Operator::OpenBracket), ..)) = token_stream.advance() {
+    while let Some(Token(TokenType::Operator(Operator::OpenBracket), _)) = token_stream.advance() {
         match token_stream.advance() {
-            Some(Token(TokenType::Operator(Operator::CloseBracket), ..)) => {
+            Some(Token(TokenType::Operator(Operator::CloseBracket), _)) => {
                 _type = Type::Array(Box::new(_type));
             }
             Some(token) => {
