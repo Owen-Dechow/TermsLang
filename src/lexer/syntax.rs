@@ -12,6 +12,10 @@ pub const STRING_QUOTES: &str = "\"'`";
 pub const FORMAT_STRING_GATES: (char, char) = ('{', '}');
 pub const IGNORED_IN_NUMBERS: &str = "_";
 
+pub const IDENTITY_PREFIX: &str = "t_";
+pub const IDENTITY_PREFIX_FREE: [&str; 7] =
+    ["null", "int", "str", "bool", "true", "false", "float"];
+
 pub struct SyntaxMap<'a> {
     pub operators: HashMap<&'a str, Operator>,
     pub keywords: HashMap<&'a str, KeyWord>,

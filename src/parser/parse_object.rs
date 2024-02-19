@@ -1,5 +1,5 @@
 use crate::{
-    errors::SyntaxError,
+    errors::ParserError,
     lexer::tokens::{Operator, Token, TokenType},
 };
 
@@ -10,17 +10,17 @@ use super::{
 };
 
 // Parse function call
-fn parse_call(token_stream: &mut TokenStream) -> Result<Call, SyntaxError> {
+fn parse_call(token_stream: &mut TokenStream) -> Result<Call, ParserError> {
     match token_stream.advance() {
         Some(Token(TokenType::Operator(Operator::OpenParen), ..)) => {}
         Some(token) => {
-            return Err(SyntaxError(
+            return Err(ParserError(
                 "Unexpected token in call arguments".to_string(),
                 Some(token.1.clone()),
             ))
         }
         None => {
-            return Err(SyntaxError(
+            return Err(ParserError(
                 "Expected start of call arguments".to_string(),
                 None,
             ))
@@ -56,7 +56,7 @@ fn parse_call(token_stream: &mut TokenStream) -> Result<Call, SyntaxError> {
             Vec::<Type>::new()
         }
         None => {
-            return Err(SyntaxError(
+            return Err(ParserError(
                 "Expected close of call arguments".to_string(),
                 None,
             ))
@@ -89,12 +89,12 @@ fn parse_call(token_stream: &mut TokenStream) -> Result<Call, SyntaxError> {
 }
 
 // Parse identity object Nonpeekable, Noncallable
-pub fn parse_object(token_stream: &mut TokenStream) -> Result<Object, SyntaxError> {
+pub fn parse_object(token_stream: &mut TokenStream) -> Result<Object, ParserError> {
     match token_stream.advance().cloned() {
         Some(token) => match token.0 {
             TokenType::Identity(..) => match token_stream.advance() {
                 Some(Token(TokenType::Operator(Operator::Dot), pos)) => {
-                    return Err(SyntaxError(
+                    return Err(ParserError(
                         "Cannot peek, call, or index identity at this location".to_string(),
                         Some(pos.clone()),
                     ))
@@ -108,31 +108,31 @@ pub fn parse_object(token_stream: &mut TokenStream) -> Result<Object, SyntaxErro
                 }
             },
             _ => {
-                return Err(SyntaxError(
+                return Err(ParserError(
                     "Unexpected token in place of identity".to_string(),
                     Some(token.1.clone()),
                 ))
             }
         },
-        None => return Err(SyntaxError("Expected identity".to_string(), None)),
+        None => return Err(ParserError("Expected identity".to_string(), None)),
     }
 }
 
 // Parse identity object Peekable, Noncallable
-pub fn parse_object_peekable(token_stream: &mut TokenStream) -> Result<Object, SyntaxError> {
+pub fn parse_object_peekable(token_stream: &mut TokenStream) -> Result<Object, ParserError> {
     match token_stream.advance().cloned() {
         Some(token) => match token.0 {
             TokenType::Identity(..) => match token_stream.advance().cloned() {
                 Some(Token(TokenType::Operator(Operator::Dot), pos)) => {
                     match token_stream.advance() {
                         Some(Token(TokenType::Operator(Operator::OpenBracket), ..)) => {
-                            return Err(SyntaxError(
+                            return Err(ParserError(
                                 "Cannot call identity at this location".to_string(),
                                 Some(pos.clone()),
                             ))
                         }
                         Some(Token(TokenType::Operator(Operator::OpenParen), ..)) => {
-                            return Err(SyntaxError(
+                            return Err(ParserError(
                                 "Cannot index identity at this location".to_string(),
                                 Some(pos.clone()),
                             ))
@@ -155,20 +155,20 @@ pub fn parse_object_peekable(token_stream: &mut TokenStream) -> Result<Object, S
                 }
             },
             _ => {
-                return Err(SyntaxError(
+                return Err(ParserError(
                     "Unexpected token in place of identity".to_string(),
                     Some(token.1.clone()),
                 ))
             }
         },
-        None => return Err(SyntaxError("Expected identity".to_string(), None)),
+        None => return Err(ParserError("Expected identity".to_string(), None)),
     }
 }
 
 // Parse identity object Peekable, Callable
 pub fn parse_object_peekable_callable(
     token_stream: &mut TokenStream,
-) -> Result<Object, SyntaxError> {
+) -> Result<Object, ParserError> {
     match token_stream.advance().cloned() {
         Some(token) => match token.0 {
             TokenType::Identity(..) => match token_stream.advance().cloned() {
@@ -228,26 +228,26 @@ pub fn parse_object_peekable_callable(
                 }
             }
             _ => {
-                return Err(SyntaxError(
+                return Err(ParserError(
                     "Unexpected token in place of identity".to_string(),
                     Some(token.1.clone()),
                 ))
             }
         },
-        None => return Err(SyntaxError("Expected identity".to_string(), None)),
+        None => return Err(ParserError("Expected identity".to_string(), None)),
     }
 }
 
-pub fn parse_object_create(token_stream: &mut TokenStream) -> Result<ObjectCreate, SyntaxError> {
+pub fn parse_object_create(token_stream: &mut TokenStream) -> Result<ObjectCreate, ParserError> {
     match token_stream.advance() {
         Some(Token(TokenType::Operator(Operator::New), ..)) => {}
         Some(token) => {
-            return Err(SyntaxError(
+            return Err(ParserError(
                 "Unexpected token in object creation".to_string(),
                 Some(token.1.clone()),
             ))
         }
-        None => return Err(SyntaxError("Expected creation operator".to_string(), None)),
+        None => return Err(ParserError("Expected creation operator".to_string(), None)),
     };
 
     let type_ = parse_type(token_stream)?;
@@ -255,12 +255,12 @@ pub fn parse_object_create(token_stream: &mut TokenStream) -> Result<ObjectCreat
     match token_stream.advance() {
         Some(Token(TokenType::Operator(Operator::Dot), ..)) => {}
         Some(Token(_, pos)) => {
-            return Err(SyntaxError(
+            return Err(ParserError(
                 "Unexpected token in place of creation call ".to_string(),
                 Some(pos.clone()),
             ))
         }
-        None => return Err(SyntaxError("Expected creation call".to_string(), None)),
+        None => return Err(ParserError("Expected creation call".to_string(), None)),
     };
 
     let call = parse_call(token_stream)?;

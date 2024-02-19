@@ -1,3 +1,9 @@
+def _loop(n):
+    for i in range(n):
+        i + i
+        p = i + 0.5
+        print(p)
+
+
 if __name__ == "__main__":
-    for i in range(10000000):
-        i * i
+    _loop(10000000)

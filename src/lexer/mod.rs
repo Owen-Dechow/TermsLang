@@ -2,14 +2,15 @@ pub mod simplify;
 pub mod syntax;
 pub mod tokens;
 
-use crate::errors::{FileLocation, SyntaxError};
+use crate::errors::{FileLocation, LexerError};
 
 use std::collections::HashMap;
 
 use self::{
     syntax::{
-        get_syntax_map, SyntaxMap, COMMENT, DECIMAL, FORMAT_STRING_GATES, IGNORED_IN_NUMBERS,
-        LINE_TERMINATOR, NEW_LINE, STRING_QUOTES, VARIABLE_ALLOWED_EXTRA_CHARS, WHITE_SPACE,
+        get_syntax_map, SyntaxMap, COMMENT, DECIMAL, FORMAT_STRING_GATES, IDENTITY_PREFIX,
+        IDENTITY_PREFIX_FREE, IGNORED_IN_NUMBERS, LINE_TERMINATOR, NEW_LINE, STRING_QUOTES,
+        VARIABLE_ALLOWED_EXTRA_CHARS, WHITE_SPACE,
     },
     tokens::{Operator, StringInterpolator, Token, TokenType},
 };
@@ -55,24 +56,6 @@ fn map_partial_fit(pattern: &String, map: &HashMap<&str, Operator>) -> bool {
     return false;
 }
 
-// Check to see if tail is: identity, operator::dot, identity
-pub fn identity_tail_compressable(tokens: &Vec<Token>) -> bool {
-    let len = tokens.len();
-    if len < 3 {
-        return false;
-    }
-
-    if let TokenType::Identity(..) = tokens[len - 3].0 {
-        if let TokenType::Operator(Operator::Dot) = tokens[len - 2].0 {
-            if let TokenType::Identity(..) = tokens[len - 1].0 {
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
 // State machine to handel each character
 fn handel_char(
     c: char,
@@ -81,7 +64,7 @@ fn handel_char(
     syntax_map: &SyntaxMap,
     seek_string_reenter: &mut (bool, char),
     positioning: &mut FileLocation,
-) -> Result<(), SyntaxError> {
+) -> Result<(), LexerError> {
     // Handel character based on state
     match &section.state {
         // If there is no current state
@@ -243,11 +226,23 @@ fn handel_char(
                     positioning.clone(),
                 ))
             } else {
+                // Check if prefix needed
                 // Complete identifier (variable) token
-                result.push(Token(
-                    TokenType::Identity(section.content.clone()),
-                    positioning.clone(),
-                ));
+                if !IDENTITY_PREFIX_FREE.contains(&content) {
+                    result.push(Token(
+                        TokenType::Identity(format!(
+                            "{}{}",
+                            IDENTITY_PREFIX,
+                            section.content.clone()
+                        )),
+                        positioning.clone(),
+                    ));
+                } else {
+                    result.push(Token(
+                        TokenType::Identity(section.content.clone()),
+                        positioning.clone(),
+                    ));
+                }
             }
 
             // Reset state
@@ -294,7 +289,7 @@ fn handel_char(
                     );
                 } else {
                     // Mark invalid operator
-                    return Err(SyntaxError(
+                    return Err(LexerError(
                         format!("Error invalid operator: {}", section.content),
                         Some(positioning.clone()),
                     ));
@@ -368,7 +363,7 @@ fn handel_char(
 }
 
 // Lex a program (input)
-pub fn lex(input: &String) -> Result<Vec<Token>, SyntaxError> {
+pub fn lex(input: &String) -> Result<Vec<Token>, LexerError> {
     // Create syntax map
     let syntax_map = get_syntax_map();
 

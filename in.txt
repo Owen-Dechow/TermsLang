@@ -1,5 +1,13 @@
-func null main: str[] args {
-    loop i: i < 10000000 {
-        cll i * i;
+func null @loop: int n {
+    loop i: i < n {
+        cll i + i;
+        let int p = (i) + (i + 1);
+        println p;
     }
+
+    return null;
+}
+
+func null main: str[] args {
+    cll @loop.(10000000);
 }

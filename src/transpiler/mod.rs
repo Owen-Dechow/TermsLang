@@ -2,12 +2,25 @@ use std::fs;
 
 use crate::{
     errors::TranspilerError,
-    lexer::tokens::{Operator, Token, TokenType},
+    lexer::{
+        syntax::IDENTITY_PREFIX,
+        tokens::{Operator, Token, TokenType},
+    },
     parser::{
         parse_operand_block::OperandExpression, Call, Object, ObjectCreate, ObjectType, Term, Type,
         VarSigniture,
     },
 };
+
+fn translate_type_identity(id: &str) -> String {
+    match id {
+        "int" => "i32",
+        "str" => "String",
+        "float" => "f32",
+        _ => id,
+    }
+    .to_string()
+}
 
 fn transpile_objectcreate(create: &ObjectCreate) -> Result<String, TranspilerError> {
     match &create.kind {
@@ -24,7 +37,8 @@ fn transpile_objectcreate(create: &ObjectCreate) -> Result<String, TranspilerErr
 
 fn transpile_main_function(block: &Term) -> Result<String, TranspilerError> {
     Ok(format!(
-        "fn main() {{ let args: Vec<String> = std::env::args().collect();{} }}",
+        "fn main() {{ let {}args: Vec<String> = std::env::args().collect();{} }}",
+        IDENTITY_PREFIX,
         transpile_term(block)?
     ))
 }
@@ -49,9 +63,9 @@ fn transpile_call(call: &Call) -> Result<String, TranspilerError> {
 
 fn transpile_token_literal(token: &Token) -> Result<String, TranspilerError> {
     return Ok(match &token.0 {
-        TokenType::Int(int) => format!("int({})", int),
+        TokenType::Int(int) => int.to_string(),
         TokenType::Float(float) => float.to_string(),
-        TokenType::String(string) => format!(r#"str("{}".to_string())"#, string),
+        TokenType::String(string) => format!(r#" "{}".to_string()) "#, string),
         _ => {
             return Err(TranspilerError(
                 "Should not find any token that cannot be read as literal in this location"
@@ -66,7 +80,9 @@ fn transpile_object(object: &Object) -> Result<String, TranspilerError> {
     let mut result = String::new();
     match &object.kind {
         ObjectType::Identity(id) => match &id.0 {
-            TokenType::Identity(id) => result += &id.replace("@", "__at__"),
+            TokenType::Identity(id) => {
+                result += &translate_type_identity(id).replace("@", "__at__")
+            }
             _ => {
                 return Err(TranspilerError(
                     "Should not find any token other than identity in this location".to_string(),
@@ -105,6 +121,7 @@ fn transpile_type(type_: &Type) -> Result<String, TranspilerError> {
             associated_types,
         } => {
             let mut result = transpile_object(&object)?;
+
             if associated_types.len() > 0 {
                 result += "<";
                 for associated_type in associated_types {
@@ -225,7 +242,7 @@ fn transpile_term(term: &Term) -> Result<String, TranspilerError> {
             block,
         } => {
             let name = transpile_object(name)?;
-            if name == "main" {
+            if name == format!("{}{}", IDENTITY_PREFIX, "main") {
                 result += &transpile_main_function(block)?;
             } else {
                 result += &format!("fn {name} <");
@@ -249,9 +266,9 @@ fn transpile_term(term: &Term) -> Result<String, TranspilerError> {
         Term::Print { ln, operand_block } => {
             let expression = transpile_operand_expression(operand_block)?;
             if *ln {
-                result = format!(r#"println!("{}", {});"#, "{}", expression)
+                result = format!(r#"println!("{{:?}}", {});"#, expression)
             } else {
-                result = format!(r#"print!("{}", {});"#, "{}", expression)
+                result = format!(r#"print!("{{:?}}", {});"#, expression)
             }
         }
         Term::DeclareVar {
@@ -298,9 +315,10 @@ fn transpile_term(term: &Term) -> Result<String, TranspilerError> {
             conditional,
             block,
         } => {
+            let i = transpile_object(counter)?;
+
             result = format!(
-                "{{ let mut {}: int = int(0); while {} {{ i += int(1); let mut i = i - int(1); {} }} }}",
-                transpile_object(counter)?,
+                "{{ let mut {i} = 0; while {} {{ {i} += 1; let mut {i} = {i} - 1; {} }} }}",
                 transpile_operand_expression(conditional)?,
                 transpile_term(block)?
             )

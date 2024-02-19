@@ -1,5 +1,5 @@
 use crate::{
-    errors::SyntaxError,
+    errors::ParserError,
     lexer::tokens::{Operator, Token, TokenType},
 };
 
@@ -9,7 +9,7 @@ use super::{
 };
 
 // Get types within <>
-pub fn get_associated_types(token_stream: &mut TokenStream) -> Result<Vec<Type>, SyntaxError> {
+pub fn get_associated_types(token_stream: &mut TokenStream) -> Result<Vec<Type>, ParserError> {
     // Create the type list
     let mut associated_types = Vec::<Type>::new();
 
@@ -32,13 +32,13 @@ pub fn get_associated_types(token_stream: &mut TokenStream) -> Result<Vec<Type>,
             Some(Token(TokenType::Operator(Operator::Greater), ..)) => break,
             Some(Token(TokenType::Operator(Operator::Comma), ..)) => continue,
             Some(token) => {
-                return Err(SyntaxError(
+                return Err(ParserError(
                     "Unexpected token in associated type list".to_string(),
                     Some(token.1.clone()),
                 ))
             }
             None => {
-                return Err(SyntaxError(
+                return Err(ParserError(
                     "Expected associated type list close".to_string(),
                     None,
                 ))
@@ -51,7 +51,7 @@ pub fn get_associated_types(token_stream: &mut TokenStream) -> Result<Vec<Type>,
 }
 
 // Get type args: <T, T2>
-pub fn get_type_args(token_stream: &mut TokenStream) -> Result<Vec<Object>, SyntaxError> {
+pub fn get_type_args(token_stream: &mut TokenStream) -> Result<Vec<Object>, ParserError> {
     // Create type args list
     let mut type_args = Vec::<Object>::new();
 
@@ -77,7 +77,7 @@ pub fn get_type_args(token_stream: &mut TokenStream) -> Result<Vec<Object>, Synt
 }
 
 // Parse a type identifier
-pub fn parse_type(token_stream: &mut TokenStream) -> Result<Type, SyntaxError> {
+pub fn parse_type(token_stream: &mut TokenStream) -> Result<Type, ParserError> {
     // Get the typename token
     let typename = parse_object_peekable(token_stream)?;
 
@@ -114,12 +114,12 @@ pub fn parse_type(token_stream: &mut TokenStream) -> Result<Type, SyntaxError> {
                 _type = Type::Array(Box::new(_type));
             }
             Some(token) => {
-                return Err(SyntaxError(
+                return Err(ParserError(
                     "Unexpected token instead of closing bracket".to_string(),
                     Some(token.1.clone()),
                 ))
             }
-            None => return Err(SyntaxError("Expected closing bracket".to_string(), None)),
+            None => return Err(ParserError("Expected closing bracket".to_string(), None)),
         }
     }
 
@@ -128,7 +128,7 @@ pub fn parse_type(token_stream: &mut TokenStream) -> Result<Type, SyntaxError> {
 }
 
 // Gen variable signiture: type<>[] name
-pub fn get_var_sig(token_stream: &mut TokenStream) -> Result<VarSigniture, SyntaxError> {
+pub fn get_var_sig(token_stream: &mut TokenStream) -> Result<VarSigniture, ParserError> {
     // Get the type of the argument
     let argtype = parse_type(token_stream)?;
 
