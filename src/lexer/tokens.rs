@@ -16,7 +16,7 @@ pub enum TokenType {
     String(String),
     Identity(String),
     Operator(Operator),
-    KewWord(KeyWord),
+    KeyWord(KeyWord),
     Terminate,
 }
 
@@ -28,7 +28,7 @@ impl Display for TokenType {
             TokenType::String(string) => format!("String:\"{string}\""),
             TokenType::Identity(identity) => format!("Identity:{identity}"),
             TokenType::Operator(operator) => format!("Operator:{operator}"),
-            TokenType::KewWord(keyword) => format!("KewWord:{keyword}"),
+            TokenType::KeyWord(keyword) => format!("KewWord:{keyword}"),
             TokenType::Terminate => format!("Terminator"),
         };
 
@@ -99,6 +99,7 @@ pub enum KeyWord {
     Break,
     Continue,
     Call,
+    Static,
 }
 impl Display for KeyWord {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

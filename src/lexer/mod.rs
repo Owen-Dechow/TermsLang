@@ -222,7 +222,7 @@ fn handel_char(
             if syntax_map.keywords.contains_key(content) {
                 // Complete kewword token
                 result.push(Token(
-                    TokenType::KewWord(syntax_map.keywords[content].clone()),
+                    TokenType::KeyWord(syntax_map.keywords[content].clone()),
                     positioning.clone(),
                 ))
             } else {

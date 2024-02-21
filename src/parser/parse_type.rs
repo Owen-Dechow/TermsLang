@@ -128,7 +128,7 @@ pub fn parse_type(token_stream: &mut TokenStream) -> Result<Type, ParserError> {
 }
 
 // Gen variable signiture: type<>[] name
-pub fn get_var_sig(token_stream: &mut TokenStream) -> Result<VarSigniture, ParserError> {
+pub fn parse_var_sig(token_stream: &mut TokenStream) -> Result<VarSigniture, ParserError> {
     // Get the type of the argument
     let argtype = parse_type(token_stream)?;
 

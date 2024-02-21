@@ -1,4 +1,6 @@
-use std::fs;
+use std::{collections::HashMap, fs, result};
+
+const AT_REPLACER: &str = "__at__";
 
 use crate::{
     errors::TranspilerError,
@@ -27,7 +29,7 @@ fn transpile_objectcreate(create: &ObjectCreate) -> Result<String, TranspilerErr
         Type::Array(type_) => return Ok(format!("Vec::<{}>::new()", transpile_type(&type_)?)),
         Type::Object { .. } => {
             return Ok(format!(
-                "{}::new{}",
+                "{}::new::{}",
                 transpile_type(&create.kind)?,
                 transpile_call(&create.args)?
             ));
@@ -50,6 +52,7 @@ fn transpile_call(call: &Call) -> Result<String, TranspilerError> {
         result += &transpile_type(&typearg)?;
         result += ","
     }
+
     result += ">(";
 
     for arg in &call.args {
@@ -65,7 +68,7 @@ fn transpile_token_literal(token: &Token) -> Result<String, TranspilerError> {
     return Ok(match &token.0 {
         TokenType::Int(int) => int.to_string(),
         TokenType::Float(float) => float.to_string(),
-        TokenType::String(string) => format!(r#" "{}".to_string()) "#, string),
+        TokenType::String(string) => format!(r#" "{}".to_string() "#, string),
         _ => {
             return Err(TranspilerError(
                 "Should not find any token that cannot be read as literal in this location"
@@ -81,7 +84,7 @@ fn transpile_object(object: &Object) -> Result<String, TranspilerError> {
     match &object.kind {
         ObjectType::Identity(id) => match &id.0 {
             TokenType::Identity(id) => {
-                result += &translate_type_identity(id).replace("@", "__at__")
+                result += &translate_type_identity(id).replace("@", AT_REPLACER)
             }
             _ => {
                 return Err(TranspilerError(
@@ -223,6 +226,57 @@ fn transpile_operator(operator: &Operator) -> Result<String, TranspilerError> {
     .to_string());
 }
 
+fn transpile_function_term(term: &Term, method: bool) -> Result<String, TranspilerError> {
+    match term {
+        Term::Func {
+            name,
+            returntype,
+            typeargs,
+            args,
+            block,
+        } => {
+            let mut result = String::new();
+            let name = transpile_object(name)?;
+
+            if name == format!("{IDENTITY_PREFIX}main") {
+                result += &transpile_main_function(block)?;
+                return Ok(result);
+            }
+
+            let returntype = &transpile_type(returntype)?;
+            let block = &transpile_term(block)?;
+
+            result += &format!("fn {name} <");
+
+            for typearg in typeargs {
+                result += &transpile_object(typearg)?;
+                result += ","
+            }
+            result += ">(";
+
+            if method {
+                result += "&mut self,"
+            }
+
+            for arg in args {
+                result += &transpile_var_signiture(arg)?;
+                result += ","
+            }
+            result += ") -> ";
+
+            result += returntype;
+            if returntype == "null" {
+                result += &format!("{{ {block} return null; }}",)
+            } else {
+                result += block;
+            }
+
+            return Ok(result);
+        }
+        _ => todo!(),
+    }
+}
+
 fn transpile_term(term: &Term) -> Result<String, TranspilerError> {
     let mut result = String::new();
 
@@ -234,41 +288,13 @@ fn transpile_term(term: &Term) -> Result<String, TranspilerError> {
             }
             result += "\n}";
         }
-        Term::Func {
-            name,
-            returntype,
-            typeargs,
-            args,
-            block,
-        } => {
-            let name = transpile_object(name)?;
-            if name == format!("{}{}", IDENTITY_PREFIX, "main") {
-                result += &transpile_main_function(block)?;
-            } else {
-                result += &format!("fn {name} <");
-
-                for typearg in typeargs {
-                    result += &transpile_object(typearg)?;
-                    result += ","
-                }
-                result += ">(";
-
-                for arg in args {
-                    result += &transpile_var_signiture(arg)?;
-                    result += ","
-                }
-                result += ") -> ";
-
-                result += &transpile_type(returntype)?;
-                result += &transpile_term(block)?;
-            }
-        }
+        Term::Func { .. } => result += &transpile_function_term(term, false)?,
         Term::Print { ln, operand_block } => {
             let expression = transpile_operand_expression(operand_block)?;
             if *ln {
-                result = format!(r#"println!("{{:?}}", {});"#, expression)
+                result = format!(r#"println!("{{}}", {});"#, expression)
             } else {
-                result = format!(r#"print!("{{:?}}", {});"#, expression)
+                result = format!(r#"print!("{{}}", {});"#, expression)
             }
         }
         Term::DeclareVar {
@@ -332,6 +358,78 @@ fn transpile_term(term: &Term) -> Result<String, TranspilerError> {
         Term::Break => result = "break;".to_string(),
         Term::Continue => result = "continue;".to_string(),
         Term::Call { value } => result = format!("{};", transpile_operand_expression(value)?),
+        Term::Class {
+            name,
+            parent,
+            properties: fields,
+            methods,
+        } => {
+            let class_name = transpile_object(name)?;
+            let parent = match parent {
+                Some(parent) => transpile_type(parent)?,
+                None => "".to_string(),
+            };
+
+            result = format!("struct {class_name} {{");
+            for field in fields {
+                result += &transpile_var_signiture(field)?;
+                result += ","
+            }
+            result += "}";
+
+            let mut method_macros = Vec::<String>::new();
+            for method in methods {
+                if let Term::Func {
+                    name,
+                    returntype,
+                    typeargs,
+                    args,
+                    block,
+                } = &method.func
+                {
+                    let name = transpile_object(name)?;
+                    let method_macro = format!("{class_name}{AT_REPLACER}{name}");
+                    result += &format!("macro_rules! {method_macro} {{ () => {{");
+
+                    if name == format!("{IDENTITY_PREFIX}{AT_REPLACER}new") {
+                        result += &format!("fn new<");
+                        for typearg in typeargs {
+                            result += &transpile_object(typearg)?;
+                            result += ","
+                        }
+                        result += ">(";
+
+                        for arg in args {
+                            result += &transpile_var_signiture(arg)?;
+                            result += ","
+                        }
+                        result += ") -> Self";
+                        result += &transpile_term(&block)?;
+                        result.remove(result.len() - 1);
+                        result += "return Self {";
+
+                        for field in fields {
+                            result += &transpile_object(&field.identity)?;
+                            result += ",";
+                        }
+
+                        result += "};}"
+                    } else {
+                        result += &transpile_function_term(&method.func, true)?;
+                    }
+
+                    result += "}}";
+                    method_macros.push(method_macro);
+                }
+            }
+
+            result += &format!("impl {class_name} {{");
+            for method_macro in method_macros {
+                result += &format!("{method_macro}!();");
+            }
+
+            result += "}"
+        }
     }
 
     return Ok(result);

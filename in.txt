@@ -1,23 +1,24 @@
-class goat: {
-    let int a;
-    let string b;
+class Loopy: {
+    let int times_run;
 
-    func @new(goat this, int a, int b) {
-        this.a = 1;
-        this.b = 2;
-    }
-}
-
-func null @loop: int n {
-    loop i: i < n {
-        cll i + i;
-        let int p = (i) + (i + 1);
-        println p;
+    func null @new: {
+        let int times_run = 0;
     }
 
-    return null;
+    func null @loop: int n {
+        loop i: i < n {
+            cll i + i;
+        }
+
+        updt self.times_run += 1;
+        print "Times Run: ";
+        println self.times_run;
+    }
 }
 
 func null main: str[] args {
-    cll @loop.(10000000);
+    let Loopy loopy = $() Loopy;
+    loop i: i < 10 {
+        cll loopy.@loop.(10000000);
+    }
 }

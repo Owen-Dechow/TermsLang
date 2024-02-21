@@ -158,7 +158,7 @@ pub fn parse_object_peekable(token_stream: &mut TokenStream) -> Result<Object, P
                 return Err(ParserError(
                     "Unexpected token in place of identity".to_string(),
                     Some(token.1.clone()),
-                ))
+                ));
             }
         },
         None => return Err(ParserError("Expected identity".to_string(), None)),
@@ -231,7 +231,7 @@ pub fn parse_object_peekable_callable(
                 return Err(ParserError(
                     "Unexpected token in place of identity".to_string(),
                     Some(token.1.clone()),
-                ))
+                ));
             }
         },
         None => return Err(ParserError("Expected identity".to_string(), None)),
@@ -250,20 +250,8 @@ pub fn parse_object_create(token_stream: &mut TokenStream) -> Result<ObjectCreat
         None => return Err(ParserError("Expected creation operator".to_string(), None)),
     };
 
-    let type_ = parse_type(token_stream)?;
-
-    match token_stream.advance() {
-        Some(Token(TokenType::Operator(Operator::Dot), _)) => {}
-        Some(Token(_, pos)) => {
-            return Err(ParserError(
-                "Unexpected token in place of creation call ".to_string(),
-                Some(pos.clone()),
-            ))
-        }
-        None => return Err(ParserError("Expected creation call".to_string(), None)),
-    };
-
     let call = parse_call(token_stream)?;
+    let type_ = parse_type(token_stream)?;
 
     return Ok(ObjectCreate {
         kind: type_,
