@@ -1,4 +1,4 @@
-workspace = { members = ["output"] }
+workspace = { members = [] }
 [package]
 name = "terms"
 version = "0.1.0"

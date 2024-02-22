@@ -1,5 +1,6 @@
 pub mod errors;
 pub mod lexer;
+pub mod llvm_compiler;
 pub mod parser;
 mod terms2rust_transpiler;
 

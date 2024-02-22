@@ -54,6 +54,9 @@ run:
 clean:
 	echo "Cleaning"
  
+	echo "\n- Update toml file"
+	-sed -i '' 's/"replacement"//g' Cargo.toml
+
 	echo "\n- Running cargo clean"
 	-cargo clean
 
