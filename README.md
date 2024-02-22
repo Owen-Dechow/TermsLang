@@ -6,40 +6,58 @@ The terms programming language
 ## Latest Version: `v0.0`
 
 ## Example
+<pre>
+<span style="color:slategray;font-style:italic"># FizzBuzz class</span>
+<span style="color:mediumorchid">class</span> <span style="color:tan">FizzBuzz</span>: {
 
-```
-class FizzBuzz: {
-    func null @new: {
-        println "FizzBuzz Object Created";
+    <span style="color:slategray;font-style:italic"># FizzBuzz initializer</span>
+    <span style="color:mediumorchid">func</span> <span style="color:steelblue">null</span> <span style="color:tan">@new</span>: {
+        <span style="color:mediumorchid">println</span> <span style="color:#03C03C">"FizzBuzz Object Created"</span>;
     }
 
-    func null run: int n {
-        loop i: i < n {
-            let str result = "";
+    <span style="color:slategray;font-style:italic"># Run function</span>
+    <span style="color:mediumorchid">func</span> <span style="color:steelblue">null</span> <span style="color:tan">run</span>: <span style="color:steelblue"><span style="color:goldenrod">int</span></span> <span style="color:tan">n</span> {
+        <span style="color:slategray;font-style:italic"># Loop n times</span>
+        <span style="color:mediumorchid">loop</span> <span style="color:tan">i</span>: <span style="color:tan">i</span> < <span style="color:tan">n</span> {
 
-            if i % 3 == 0 {
-                updt result += "Fizz";
+            <span style="color:slategray;font-style:italic"># Declare result var</span>
+            <span style="color:mediumorchid">let</span> <span style="color:steelblue">str</span> <span style="color:tan">result</span> = <span style="color:#03C03C">""</span>;
+
+            <span style="color:mediumorchid">if</span> <span style="color:tan">i</span> % <span style="color:goldenrod">3</span> == <span style="color:goldenrod">0</span> {
+                <span style="color:slategray;font-style:italic"># Update result var</span>
+                <span style="color:steelblue">updt</span> <span style="color:tan">result</span> += <span style="color:#03C03C">"Fizz"</span>;
             }
 
-            if i % 5 == 0 {
-                updt result += "Buzz";
+            <span style="color:mediumorchid">if</span> <span style="color:tan">i</span> % <span style="color:goldenrod">5</span> == <span style="color:goldenrod">0</span> {
+                <span style="color:slategray;font-style:italic"># Update result var</span>
+                <span style="color:steelblue">updt</span> <span style="color:tan">result</span> += <span style="color:#03C03C">"Buzz"</span>;
             }
 
-            if result == "" {
-                println i;
-                return null;
+            <span style="color:slategray;font-style:italic"># Check if no Fizz or Buzz</span>
+            <span style="color:mediumorchid">if</span> <span style="color:tan">result</span> == <span style="color:#03C03C">""</span> {
+                <span style="color:slategray;font-style:italic"># Print number (i)</span>
+                <span style="color:mediumorchid">println</span> <span style="color:goldenrod"><span style="color:tan">i</span></span>;
+                
+                <span style="color:slategray;font-style:italic"># Exit function early</span>
+                <span style="color:mediumorchid">return</span> <span style="color:steelblue">null</span>;
             }
 
-            println result;
+            <span style="color:slategray;font-style:italic"># Print result</span>
+            <span style="color:mediumorchid">println</span> <span style="color:tan">result</span>;
         }
     }
 }
 
-func null main: str[] args {
-    let FizzBuzz fizzy = $() FizzBuzz;
-    cll fizzy.run.(100);
+<span style="color:slategray;font-style:italic"># main function</span>
+<span style="color:mediumorchid">func</span> <span style="color:steelblue">null</span> <span style="color:tan">main</span>: <span style="color:steelblue">str</span>[] <span style="color:tan">args</span> {
+
+    <span style="color:slategray;font-style:italic"># Create FizzBuzz instance</span>
+    <span style="color:steelblue">let</span> <span style="color:tan">FizzBuzz</span> <span style="color:tan">fizzy</span> = $() <span style="color:tan">FizzBuzz</span>;
+
+    <span style="color:slategray;font-style:italic"># Call run function</span>
+    <span style="color:steelblue">cll</span> <span style="color:tan">fizzy</span>.<span style="color:tan">run</span>.(<span style="color:goldenrod">100</span>);
 }
-```
+</pre>
 
 ## Compiler
 - [x] Main Lexer

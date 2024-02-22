@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs, result};
+use std::fs;
 
 const AT_REPLACER: &str = "__at__";
 
@@ -365,7 +365,7 @@ fn transpile_term(term: &Term) -> Result<String, TranspilerError> {
             methods,
         } => {
             let class_name = transpile_object(name)?;
-            let parent = match parent {
+            let _parent = match parent {
                 Some(parent) => transpile_type(parent)?,
                 None => "".to_string(),
             };
@@ -381,7 +381,7 @@ fn transpile_term(term: &Term) -> Result<String, TranspilerError> {
             for method in methods {
                 if let Term::Func {
                     name,
-                    returntype,
+                    returntype: _,
                     typeargs,
                     args,
                     block,

@@ -1,5 +1,3 @@
-use std::{arch::x86_64::_MM_FROUND_CEIL, env::var};
-
 use crate::{
     errors::{FileLocation, ParserError},
     lexer::tokens::{KeyWord, Operator, Token, TokenType},
