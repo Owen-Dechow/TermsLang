@@ -62,14 +62,12 @@ The terms programming language
 ## Compiler
 - [x] Main Lexer
 - [x] Main Parser
-- [x] Temperary Transpiler
 - [ ] Main LLVM Compiler
 - [ ] Version 1.0
 
 Main implimentations are not fully complete for `v1.0` goals see [Still in development](still-in-development)
 
-  
-The goal of `TermsLang` is to be compiled using LLVM the `terms2rust_transpiler` is only tempary and fails to properly transpile most code.
+The goal of `TermsLang` is to be compiled using LLVM any interpreter or transpiler is temperary and to be used for testing.
 
 ## Still in development
 * String escape sequences

@@ -92,17 +92,17 @@ fn parse_call(token_stream: &mut TokenStream) -> Result<Call, ParserError> {
 pub fn parse_object(token_stream: &mut TokenStream) -> Result<Object, ParserError> {
     match token_stream.advance().cloned() {
         Some(token) => match token.0 {
-            TokenType::Identity(_) => match token_stream.advance() {
+            TokenType::Identity(id) => match token_stream.advance() {
                 Some(Token(TokenType::Operator(Operator::Dot), pos)) => {
                     return Err(ParserError(
                         "Cannot peek, call, or index identity at this location".to_string(),
                         Some(pos.clone()),
-                    ))
+                    ));
                 }
                 _ => {
                     token_stream.back();
                     return Ok(Object {
-                        kind: ObjectType::Identity(token.clone()),
+                        kind: ObjectType::Identity(id),
                         sub: None,
                     });
                 }
@@ -122,7 +122,7 @@ pub fn parse_object(token_stream: &mut TokenStream) -> Result<Object, ParserErro
 pub fn parse_object_peekable(token_stream: &mut TokenStream) -> Result<Object, ParserError> {
     match token_stream.advance().cloned() {
         Some(token) => match token.0 {
-            TokenType::Identity(_) => match token_stream.advance().cloned() {
+            TokenType::Identity(id) => match token_stream.advance().cloned() {
                 Some(Token(TokenType::Operator(Operator::Dot), pos)) => {
                     match token_stream.advance() {
                         Some(Token(TokenType::Operator(Operator::OpenBracket), _)) => {
@@ -140,7 +140,7 @@ pub fn parse_object_peekable(token_stream: &mut TokenStream) -> Result<Object, P
                         _ => {
                             token_stream.back();
                             return Ok(Object {
-                                kind: ObjectType::Identity(token.clone()),
+                                kind: ObjectType::Identity(id),
                                 sub: Some(Box::new(parse_object_peekable(token_stream)?)),
                             });
                         }
@@ -149,7 +149,7 @@ pub fn parse_object_peekable(token_stream: &mut TokenStream) -> Result<Object, P
                 _ => {
                     token_stream.back();
                     return Ok(Object {
-                        kind: ObjectType::Identity(token.clone()),
+                        kind: ObjectType::Identity(id),
                         sub: None,
                     });
                 }
@@ -171,17 +171,17 @@ pub fn parse_object_peekable_callable(
 ) -> Result<Object, ParserError> {
     match token_stream.advance().cloned() {
         Some(token) => match token.0 {
-            TokenType::Identity(_) => match token_stream.advance().cloned() {
+            TokenType::Identity(id) => match token_stream.advance().cloned() {
                 Some(Token(TokenType::Operator(Operator::Dot), _)) => {
                     return Ok(Object {
-                        kind: ObjectType::Identity(token.clone()),
+                        kind: ObjectType::Identity(id),
                         sub: Some(Box::new(parse_object_peekable_callable(token_stream)?)),
                     });
                 }
                 _ => {
                     token_stream.back();
                     return Ok(Object {
-                        kind: ObjectType::Identity(token.clone()),
+                        kind: ObjectType::Identity(id),
                         sub: None,
                     });
                 }

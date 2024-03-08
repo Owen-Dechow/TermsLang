@@ -8,9 +8,8 @@ use std::collections::HashMap;
 
 use self::{
     syntax::{
-        get_syntax_map, SyntaxMap, COMMENT, DECIMAL, FORMAT_STRING_GATES, IDENTITY_PREFIX,
-        IDENTITY_PREFIX_FREE, IGNORED_IN_NUMBERS, LINE_TERMINATOR, NEW_LINE, STRING_QUOTES,
-        VARIABLE_ALLOWED_EXTRA_CHARS, WHITE_SPACE,
+        get_syntax_map, SyntaxMap, COMMENT, DECIMAL, FORMAT_STRING_GATES, IGNORED_IN_NUMBERS,
+        LINE_TERMINATOR, NEW_LINE, STRING_QUOTES, VARIABLE_ALLOWED_EXTRA_CHARS, WHITE_SPACE,
     },
     tokens::{Operator, StringInterpolator, Token, TokenType},
 };
@@ -225,24 +224,18 @@ fn handel_char(
                     TokenType::KeyWord(syntax_map.keywords[content].clone()),
                     positioning.clone(),
                 ))
+            } else if syntax_map.bools.contains_key(content) {
+                // Complete bool token
+                result.push(Token(
+                    TokenType::Bool(syntax_map.bools[content].clone()),
+                    positioning.clone(),
+                ))
             } else {
-                // Check if prefix needed
                 // Complete identifier (variable) token
-                if !IDENTITY_PREFIX_FREE.contains(&content) {
-                    result.push(Token(
-                        TokenType::Identity(format!(
-                            "{}{}",
-                            IDENTITY_PREFIX,
-                            section.content.clone()
-                        )),
-                        positioning.clone(),
-                    ));
-                } else {
-                    result.push(Token(
-                        TokenType::Identity(section.content.clone()),
-                        positioning.clone(),
-                    ));
-                }
+                result.push(Token(
+                    TokenType::Identity(section.content.clone()),
+                    positioning.clone(),
+                ));
             }
 
             // Reset state

@@ -3,10 +3,7 @@ use crate::{
     lexer::tokens::{Operator, Token, TokenType},
 };
 
-use super::{
-    parse_object::{parse_object, parse_object_peekable},
-    Object, TokenStream, Type, VarSigniture,
-};
+use super::{parse_object::parse_object_peekable, TokenStream, Type, VarSigniture};
 
 // Get types within <>
 pub fn get_associated_types(token_stream: &mut TokenStream) -> Result<Vec<Type>, ParserError> {
@@ -51,9 +48,9 @@ pub fn get_associated_types(token_stream: &mut TokenStream) -> Result<Vec<Type>,
 }
 
 // Get type args: <T, T2>
-pub fn get_type_args(token_stream: &mut TokenStream) -> Result<Vec<Object>, ParserError> {
+pub fn get_type_args(token_stream: &mut TokenStream) -> Result<Vec<String>, ParserError> {
     // Create type args list
-    let mut type_args = Vec::<Object>::new();
+    let mut type_args = Vec::<String>::new();
 
     // Get args
     loop {
@@ -62,7 +59,18 @@ pub fn get_type_args(token_stream: &mut TokenStream) -> Result<Vec<Object>, Pars
         }
 
         token_stream.back();
-        type_args.push(parse_object(token_stream)?);
+        type_args.push(match token_stream.advance() {
+            Some(op) => match &op.0 {
+                TokenType::Identity(id) => id.to_owned(),
+                _ => {
+                    return Err(ParserError(
+                        "Unexpected token in place of type argument name".to_string(),
+                        Some(op.1.clone()),
+                    ))
+                }
+            },
+            None => return Err(ParserError("Expected type argument name".to_string(), None)),
+        });
 
         match token_stream.advance() {
             Some(Token(TokenType::Operator(Operator::Comma), _)) => {}
@@ -133,7 +141,18 @@ pub fn parse_var_sig(token_stream: &mut TokenStream) -> Result<VarSigniture, Par
     let argtype = parse_type(token_stream)?;
 
     // Get the name of the argument
-    let name = parse_object(token_stream)?;
+    let name = match token_stream.advance() {
+        Some(op) => match &op.0 {
+            TokenType::Identity(id) => id.to_owned(),
+            _ => {
+                return Err(ParserError(
+                    "Unexpected token in place of varible name".to_string(),
+                    Some(op.1.clone()),
+                ))
+            }
+        },
+        None => return Err(ParserError("Expected variable name".to_string(), None)),
+    };
 
     // Return the new variable signiture
     return Ok(VarSigniture {

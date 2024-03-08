@@ -1,3 +1,3 @@
 use crate::parser::Term;
 
-pub fn compile(program: &Term) {}
+pub fn compile(_program: &Term) {}

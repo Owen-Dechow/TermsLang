@@ -1,24 +1,50 @@
-class Loopy: {
-    let int times_run;
+# FizzBuzz class
+class FizzBuzz: {
 
+    # FizzBuzz initializer
     func null @new: {
-        let int times_run = 0;
+        println "FizzBuzz Object Created";
     }
 
-    func null @loop: int n {
+    # Run function
+    func null run: int n {
+        # Loop n times
         loop i: i < n {
-            cll i + i;
-        }
 
-        updt self.times_run += 1;
-        print "Times Run: ";
-        println self.times_run;
+            # Declare result var
+            let str result = "";
+
+            if i % 3 == 0 {
+                # Update result var
+                updt result += "Fizz";
+            }
+
+            if i % 5 == 0 {
+                # Update result var
+                updt result += "Buzz";
+            }
+
+            # Check if no Fizz or Buzz
+            if result == "" {
+                # Print number (i)
+                println i;
+                
+                # Exit function early
+                return null;
+            }
+
+            # Print result
+            println result;
+        }
     }
 }
 
+# main function
 func null main: str[] args {
-    let Loopy loopy = $() Loopy;
-    loop i: i < 10 {
-        cll loopy.@loop.(10000000);
-    }
+
+    # Create FizzBuzz instance
+    let FizzBuzz fizzy = $() FizzBuzz;
+
+    # Call run function
+    cll fizzy.run.(100);
 }

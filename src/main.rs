@@ -2,7 +2,6 @@ pub mod errors;
 pub mod lexer;
 pub mod llvm_compiler;
 pub mod parser;
-mod terms2rust_transpiler;
 
 use std::fs;
 
@@ -27,12 +26,7 @@ fn main() {
     let parse_out = parser::parse(lex_out);
 
     match &parse_out {
-        Ok(block) => match terms2rust_transpiler::transpile(block) {
-            Ok(out) => {
-                let _ = fs::write("output/src/main.rs", out);
-            }
-            Err(err) => panic!("{}", err.prettify(&program)),
-        },
+        Ok(_) => {}
         Err(err) => {
             println!("{}", err.prettify(&program));
             panic!("{}", err.prettify(&program));

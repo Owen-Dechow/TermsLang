@@ -263,6 +263,7 @@ pub fn parse_operand_block(
                 TokenType::Int(_) => OperandComponent::Literal(token.clone()),
                 TokenType::Float(_) => OperandComponent::Literal(token.clone()),
                 TokenType::String(_) => OperandComponent::Literal(token.clone()),
+                TokenType::Bool(_) => OperandComponent::Literal(token.clone()),
                 TokenType::Identity(_) => {
                     token_stream.back();
                     OperandComponent::Object(parse_object_peekable_callable(token_stream)?)
