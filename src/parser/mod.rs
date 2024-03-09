@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::{
     errors::{FileLocation, ParserError},
     lexer::tokens::{KeyWord, Operator, Token, TokenType},
@@ -76,20 +74,6 @@ pub struct Object {
     pub kind: ObjectType,
     pub sub: Option<Box<Object>>,
 }
-impl Object {
-    fn stringify(&self) -> String {
-        let string = match &self.kind {
-            ObjectType::Identity(id) => id.to_owned(),
-            ObjectType::Call(_) => "()".to_string(),
-            ObjectType::Index(_) => "[]".to_string(),
-        };
-
-        match &self.sub {
-            Some(sub) => string + &sub.stringify(),
-            None => string,
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct ObjectCreate {
@@ -113,7 +97,7 @@ pub struct Call {
 #[derive(Debug, Clone)]
 pub struct Index(Vec<OperandExpression>);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VarSigniture {
     pub identity: String,
     pub argtype: Type,
@@ -177,58 +161,11 @@ pub enum Term {
         parent: Option<Type>,
         properties: Vec<VarSigniture>,
         methods: Vec<Method>,
-        child_registry: VarRegistry,
     },
 }
 
-#[derive(Debug, Clone)]
-pub struct VarRegistry {
-    vars: HashMap<String, VarRegistryType>,
-    parent: Option<Box<VarRegistry>>,
-}
-impl VarRegistry {
-    fn get_var(&self, var: &Object) -> Option<VarRegistryType> {
-        match &var.kind {
-            ObjectType::Identity(id) => match self.vars.get(id) {
-                Some(some) => Some(some.clone()),
-                None => match &self.parent {
-                    Some(parent) => parent.get_var(var),
-                    None => None,
-                },
-            },
-            ObjectType::Call(_cll) => todo!(),
-            ObjectType::Index(_idx) => todo!(),
-        }
-    }
-
-    fn add_var(&mut self, var: String, var_type: VarRegistryType) {
-        self.vars.insert(var, var_type);
-    }
-
-    fn new_block(parent: Option<&Self>) -> Self {
-        Self {
-            vars: HashMap::<String, VarRegistryType>::new(),
-            parent: match parent {
-                Some(parent) => Some(Box::new(parent.clone())),
-                None => None,
-            },
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-enum VarRegistryType {
-    Var(Type),
-    Class,
-    Func(Type),
-}
-
 // Parse single term
-fn parse_term(
-    lead_token: Token,
-    token_stream: &mut TokenStream,
-    var_registry: &mut VarRegistry,
-) -> Result<Term, ParserError> {
+fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term, ParserError> {
     // Parse function
     if let Token(TokenType::KeyWord(KeyWord::Func), _) = lead_token {
         // Get return type of function
@@ -301,8 +238,10 @@ fn parse_term(
                 // Roll token stream back to start of arg declaration
                 token_stream.back();
 
+                let var_sig = parse_type::parse_var_sig(token_stream)?;
+
                 // Parse argument and add to arg list
-                args.push(parse_type::parse_var_sig(token_stream)?);
+                args.push(var_sig.clone());
 
                 // Check if arg list continues or start of block found else return syntax error
                 match token_stream.advance() {
@@ -326,9 +265,7 @@ fn parse_term(
         token_stream.back();
 
         // Get function block
-        let block = Box::new(parse_block(token_stream, false, Some(var_registry))?);
-
-        var_registry.add_var(name.to_owned(), VarRegistryType::Func(returntype.clone()));
+        let block = Box::new(parse_block(token_stream, false)?);
 
         // Add function to term array
         return Ok(Term::Func {
@@ -385,8 +322,6 @@ fn parse_term(
 
         let value = parse_operand_block(token_stream, vec![TokenType::Terminate])?;
 
-        var_registry.add_var(name.to_owned(), VarRegistryType::Var(vartype.clone()));
-
         return Ok(Term::DeclareVar {
             name: name.to_owned(),
             vartype,
@@ -404,16 +339,6 @@ fn parse_term(
     // Parse var update
     if let Token(TokenType::KeyWord(KeyWord::UpdateVar), _) = lead_token {
         let var = parse_object_peekable(token_stream)?;
-
-        let _expected_var = match var_registry.get_var(&var) {
-            Some(var) => var,
-            None => {
-                return Err(ParserError(
-                    format!("The variable '{}' is not defined", var.stringify()),
-                    Some(lead_token.1.clone()),
-                ))
-            }
-        };
 
         let set_operator = match token_stream.advance() {
             Some(Token(TokenType::Operator(operator), pos)) => match operator {
@@ -460,17 +385,17 @@ fn parse_term(
         let conditional =
             parse_operand_block(token_stream, vec![TokenType::Operator(Operator::OpenBlock)])?;
         token_stream.back();
-        let block = parse_block(token_stream, false, Some(var_registry))?;
+        let block = parse_block(token_stream, false)?;
 
         let else_block = match token_stream.advance() {
             Some(Token(TokenType::KeyWord(KeyWord::Else), _)) => match token_stream.advance() {
                 Some(token) => match token {
                     Token(TokenType::KeyWord(KeyWord::If), _) => {
-                        parse_term(token.clone(), token_stream, var_registry)?
+                        parse_term(token.clone(), token_stream)?
                     }
                     Token(TokenType::Operator(Operator::OpenBlock), _) => {
                         token_stream.back();
-                        parse_block(token_stream, false, Some(var_registry))?
+                        parse_block(token_stream, false)?
                     }
                     _ => {
                         return Err(ParserError(
@@ -511,17 +436,6 @@ fn parse_term(
             None => return Err(ParserError("Expected loop counter name".to_string(), None)),
         };
 
-        var_registry.add_var(
-            counter.to_owned(),
-            VarRegistryType::Var(Type::Object {
-                object: Object {
-                    kind: ObjectType::Identity("int".to_string()),
-                    sub: None,
-                },
-                associated_types: Vec::<Type>::new(),
-            }),
-        );
-
         // Burn var conditional seperator
         match token_stream.advance() {
             Some(Token(TokenType::Operator(Operator::Colon), _)) => {}
@@ -544,7 +458,7 @@ fn parse_term(
             parse_operand_block(token_stream, vec![TokenType::Operator(Operator::OpenBlock)])?;
         token_stream.back();
 
-        let block = parse_block(token_stream, false, Some(var_registry))?;
+        let block = parse_block(token_stream, false)?;
 
         return Ok(Term::Loop {
             counter,
@@ -672,7 +586,6 @@ fn parse_term(
 
         let mut methods = Vec::<Method>::new();
         let mut properties = Vec::<VarSigniture>::new();
-        let mut child_registry = VarRegistry::new_block(None);
         loop {
             if let Some(Token(TokenType::Operator(Operator::CloseBlock), _)) =
                 token_stream.advance()
@@ -704,16 +617,14 @@ fn parse_term(
                             }
                         };
 
-                        let function =
-                            parse_term(func_token.clone(), token_stream, &mut child_registry)?;
+                        let function = parse_term(func_token.clone(), token_stream)?;
                         methods.push(Method {
                             func: function,
                             is_static: true,
                         })
                     }
                     Token(TokenType::KeyWord(KeyWord::Func), _) => {
-                        let function =
-                            parse_term(token.clone(), token_stream, &mut child_registry)?;
+                        let function = parse_term(token.clone(), token_stream)?;
                         methods.push(Method {
                             func: function,
                             is_static: false,
@@ -739,10 +650,6 @@ fn parse_term(
                             }
                         };
 
-                        child_registry.add_var(
-                            var_sig.identity.to_owned(),
-                            VarRegistryType::Var(var_sig.argtype.clone()),
-                        );
                         properties.push(var_sig);
                     }
                     _ => {
@@ -756,14 +663,11 @@ fn parse_term(
             }
         }
 
-        var_registry.add_var(name.clone(), VarRegistryType::Class);
-
         return Ok(Term::Class {
             name,
             parent,
             properties,
             methods,
-            child_registry,
         });
     }
 
@@ -777,11 +681,7 @@ fn parse_term(
 fn parse_block(
     token_stream: &mut TokenStream,
     omit_block_tokens: bool,
-    parent_var_registry: Option<&VarRegistry>,
 ) -> Result<Term, ParserError> {
-    // Create new var registry
-    let mut var_registry = VarRegistry::new_block(parent_var_registry);
-
     // Check for block open
     let mut block = {
         if omit_block_tokens {
@@ -816,7 +716,7 @@ fn parse_block(
             }
 
             // Parse term
-            let term = parse_term(t, token_stream, &mut var_registry)?;
+            let term = parse_term(t, token_stream)?;
             terms.push(term);
         }
     };
@@ -844,5 +744,5 @@ pub fn parse(input: Vec<Token>) -> Result<Term, ParserError> {
     token_stream.add_lead();
 
     // Parse and return the program block
-    return parse_block(&mut token_stream, true, None);
+    return parse_block(&mut token_stream, true);
 }

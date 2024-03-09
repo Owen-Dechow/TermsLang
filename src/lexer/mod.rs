@@ -116,6 +116,26 @@ fn handel_char(
                     positioning.clone(),
                 ));
                 result.push(Token(
+                    TokenType::Operator(Operator::Dot),
+                    positioning.clone(),
+                ));
+                result.push(Token(
+                    TokenType::Identity("@str".to_string()),
+                    positioning.clone(),
+                ));
+                result.push(Token(
+                    TokenType::Operator(Operator::Dot),
+                    positioning.clone(),
+                ));
+                result.push(Token(
+                    TokenType::Operator(Operator::OpenParen),
+                    positioning.clone(),
+                ));
+                result.push(Token(
+                    TokenType::Operator(Operator::CloseParen),
+                    positioning.clone(),
+                ));
+                result.push(Token(
                     TokenType::Operator(Operator::Add),
                     positioning.clone(),
                 ));

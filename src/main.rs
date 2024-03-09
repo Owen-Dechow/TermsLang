@@ -1,4 +1,5 @@
 pub mod errors;
+pub mod interpretor;
 pub mod lexer;
 pub mod llvm_compiler;
 pub mod parser;
@@ -17,19 +18,23 @@ fn main() {
     let lex_out = match lexer::lex(&program) {
         Ok(lex) => lex,
         Err(err) => {
-            println!("{}", err.prettify(&program));
             panic!("{}", err.prettify(&program));
         }
     };
 
     // Parse lex
-    let parse_out = parser::parse(lex_out);
-
-    match &parse_out {
-        Ok(_) => {}
+    let parse_out = match parser::parse(lex_out) {
+        Ok(parse) => parse,
         Err(err) => {
-            println!("{}", err.prettify(&program));
             panic!("{}", err.prettify(&program));
         }
-    }
+    };
+
+    // Run prog
+    let _interpretor_out = match interpretor::interpret(parse_out) {
+        Ok(_) => {}
+        Err(err) => {
+            panic!("{}", err.prettify(&program));
+        }
+    };
 }

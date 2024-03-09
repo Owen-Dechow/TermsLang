@@ -19,6 +19,11 @@ impl ParserError {
     prettify_macro! {"Parser Error"}
 }
 
+pub struct RuntimeError(pub String, pub Option<FileLocation>);
+impl RuntimeError {
+    prettify_macro! {"Runtime Error"}
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct FileLocation {
     pub start_line: usize,
