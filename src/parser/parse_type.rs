@@ -31,7 +31,7 @@ pub fn get_associated_types(token_stream: &mut TokenStream) -> Result<Vec<Type>,
             Some(token) => {
                 return Err(ParserError(
                     "Unexpected token in associated type list".to_string(),
-                    (token.1.clone()),
+                    token.1.clone(),
                 ))
             }
             None => {
@@ -65,7 +65,7 @@ pub fn get_type_args(token_stream: &mut TokenStream) -> Result<Vec<String>, Pars
                 _ => {
                     return Err(ParserError(
                         "Unexpected token in place of type argument name".to_string(),
-                        (op.1.clone()),
+                        op.1.clone(),
                     ))
                 }
             },
@@ -129,7 +129,7 @@ pub fn parse_type(token_stream: &mut TokenStream) -> Result<Type, ParserError> {
             Some(token) => {
                 return Err(ParserError(
                     "Unexpected token instead of closing bracket".to_string(),
-                    (token.1.clone()),
+                    token.1.clone(),
                 ))
             }
             None => {
@@ -157,7 +157,7 @@ pub fn parse_var_sig(token_stream: &mut TokenStream) -> Result<VarSigniture, Par
             _ => {
                 return Err(ParserError(
                     "Unexpected token in place of varible name".to_string(),
-                    (op.1.clone()),
+                    op.1.clone(),
                 ))
             }
         },

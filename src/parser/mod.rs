@@ -472,7 +472,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             Some(token) => {
                 return Err(ParserError(
                     "Unexpected token in loop signiture".to_string(),
-                    (token.1.clone()),
+                    token.1.clone(),
                 ))
             }
 
@@ -505,7 +505,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                 _ => {
                     return Err(ParserError(
                         "Unexpected token at after break".to_string(),
-                        (token.1.clone()),
+                        token.1.clone(),
                     ))
                 }
             },
@@ -526,7 +526,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                 _ => {
                     return Err(ParserError(
                         "Unexpected token at after continue".to_string(),
-                        (token.1.clone()),
+                        token.1.clone(),
                     ))
                 }
             },
@@ -556,7 +556,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                 _ => {
                     return Err(ParserError(
                         "Unexpected token at after continue".to_string(),
-                        (token.1.clone()),
+                        token.1.clone(),
                     ))
                 }
             },
@@ -595,7 +595,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             Some(token) => {
                 return Err(ParserError(
                     "Unexpected token in class definition".to_string(),
-                    (token.1.clone()),
+                    token.1.clone(),
                 ))
             }
             None => {
@@ -623,7 +623,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             Some(token) => {
                 return Err(ParserError(
                     "Unexpected token in class definition".to_string(),
-                    (token.1.clone()),
+                    token.1.clone(),
                 ))
             }
             None => {
@@ -689,7 +689,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                             Some(token) => {
                                 return Err(ParserError(
                                     "Unexpected token in property definition".to_string(),
-                                    (token.1.clone()),
+                                    token.1.clone(),
                                 ))
                             }
                             None => {
@@ -705,7 +705,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                     _ => {
                         return Err(ParserError(
                             "Unexpected token within class block".to_string(),
-                            (token.1.clone()),
+                            token.1.clone(),
                         ))
                     }
                 },
@@ -728,7 +728,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
 
     return Err(ParserError(
         "Unrecognized term".to_string(),
-        (lead_token.1.clone()),
+        lead_token.1.clone(),
     ));
 }
 
@@ -749,7 +749,7 @@ fn parse_block(
                     terms: Vec::<Term>::new(),
                 },
                 Some(token) => {
-                    return Err(ParserError("Expected block".to_string(), (token.1.clone())))
+                    return Err(ParserError("Expected block".to_string(), token.1.clone()))
                 }
                 None => return Err(ParserError("Expected block".to_string(), FileLocation::EOF)),
             }
@@ -781,7 +781,7 @@ fn parse_block(
             Some(Token(_, pos)) => {
                 return Err(ParserError(
                     "Unexpected token at block closing".to_string(),
-                    (pos.clone()),
+                    pos.clone(),
                 ))
             }
             None => {

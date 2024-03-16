@@ -12,6 +12,7 @@ pub struct TranspilerError(pub String, pub FileLocation);
 impl TranspilerError {
     prettify_macro! {"Lexer Error"}
 }
+from_for_err_macro! {TranspilerError}
 
 #[derive(Debug)]
 pub struct ParserError(pub String, pub FileLocation);

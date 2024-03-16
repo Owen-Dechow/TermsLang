@@ -81,3 +81,13 @@ macro_rules! prettify_macro {
         }
     };
 }
+
+macro_rules! from_for_err_macro {
+    ($err_type:ty) => {
+        impl From<$err_type> for std::io::Error {
+            fn from(err: $err_type) -> Self {
+                std::io::Error::new(std::io::ErrorKind::Other, err.0)
+            }
+        }
+    };
+}
