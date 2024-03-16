@@ -44,6 +44,23 @@ impl Section {
     }
 }
 
+struct FileLocationModel {
+    start_line: usize,
+    end_line: usize,
+    start_col: usize,
+    end_col: usize,
+}
+impl FileLocationModel {
+    fn build(&self) -> FileLocation {
+        FileLocation::Loc {
+            start_line: self.start_line,
+            end_line: self.end_line,
+            start_col: self.start_col,
+            end_col: self.end_col,
+        }
+    }
+}
+
 // Check if string is section of valid operator: (&, &&) => true
 fn map_partial_fit(pattern: &String, map: &HashMap<&str, Operator>) -> bool {
     for key in map.keys() {
@@ -62,7 +79,7 @@ fn handel_char(
     result: &mut Vec<Token>,
     syntax_map: &SyntaxMap,
     seek_string_reenter: &mut (bool, char),
-    positioning: &mut FileLocation,
+    positioning: &mut FileLocationModel,
 ) -> Result<(), LexerError> {
     // Handel character based on state
     match &section.state {
@@ -99,7 +116,7 @@ fn handel_char(
 
             // Check for end of line marker
             if c == LINE_TERMINATOR {
-                result.push(Token(TokenType::Terminate, positioning.clone()));
+                result.push(Token(TokenType::Terminate, positioning.build()));
                 return Ok(());
             }
 
@@ -113,31 +130,31 @@ fn handel_char(
             if seek_string_reenter.0 && c == FORMAT_STRING_GATES.1 {
                 result.push(Token(
                     TokenType::Operator(Operator::CloseParen),
-                    positioning.clone(),
+                    positioning.build(),
                 ));
                 result.push(Token(
                     TokenType::Operator(Operator::Dot),
-                    positioning.clone(),
+                    positioning.build(),
                 ));
                 result.push(Token(
                     TokenType::Identity("@str".to_string()),
-                    positioning.clone(),
+                    positioning.build(),
                 ));
                 result.push(Token(
                     TokenType::Operator(Operator::Dot),
-                    positioning.clone(),
+                    positioning.build(),
                 ));
                 result.push(Token(
                     TokenType::Operator(Operator::OpenParen),
-                    positioning.clone(),
+                    positioning.build(),
                 ));
                 result.push(Token(
                     TokenType::Operator(Operator::CloseParen),
-                    positioning.clone(),
+                    positioning.build(),
                 ));
                 result.push(Token(
                     TokenType::Operator(Operator::Add),
-                    positioning.clone(),
+                    positioning.build(),
                 ));
                 section.state =
                     SectionState::String(seek_string_reenter.1, StringInterpolator::Interpolated);
@@ -174,7 +191,7 @@ fn handel_char(
             // Complete int token
             result.push(Token(
                 TokenType::Int(section.content.parse().unwrap()),
-                positioning.clone(),
+                positioning.build(),
             ));
             section.reset();
             return handel_char(
@@ -203,7 +220,7 @@ fn handel_char(
             // Complete float token
             result.push(Token(
                 TokenType::Float(section.content.parse().unwrap()),
-                positioning.clone(),
+                positioning.build(),
             ));
             section.reset();
             return handel_char(
@@ -242,19 +259,19 @@ fn handel_char(
                 // Complete kewword token
                 result.push(Token(
                     TokenType::KeyWord(syntax_map.keywords[content].clone()),
-                    positioning.clone(),
+                    positioning.build(),
                 ))
             } else if syntax_map.bools.contains_key(content) {
                 // Complete bool token
                 result.push(Token(
                     TokenType::Bool(syntax_map.bools[content].clone()),
-                    positioning.clone(),
+                    positioning.build(),
                 ))
             } else {
                 // Complete identifier (variable) token
                 result.push(Token(
                     TokenType::Identity(section.content.clone()),
-                    positioning.clone(),
+                    positioning.build(),
                 ));
             }
 
@@ -289,7 +306,7 @@ fn handel_char(
                     // Complete operator token
                     result.push(Token(
                         TokenType::Operator(syntax_map.operators[content].clone()),
-                        positioning.clone(),
+                        positioning.build(),
                     ));
                     section.reset();
                     return handel_char(
@@ -304,7 +321,7 @@ fn handel_char(
                     // Mark invalid operator
                     return Err(LexerError(
                         format!("Error invalid operator: {}", section.content),
-                        Some(positioning.clone()),
+                        positioning.build(),
                     ));
                 }
             }
@@ -329,7 +346,7 @@ fn handel_char(
                 positioning.end_col += 1;
                 result.push(Token(
                     TokenType::String(section.content.clone()),
-                    positioning.clone(),
+                    positioning.build(),
                 ));
                 positioning.end_col -= 1;
 
@@ -344,19 +361,19 @@ fn handel_char(
                     // Add current string as token
                     result.push(Token(
                         TokenType::String(section.content.clone()),
-                        positioning.clone(),
+                        positioning.build(),
                     ));
 
                     // Add string join operator
                     result.push(Token(
                         TokenType::Operator(Operator::Add),
-                        positioning.clone(),
+                        positioning.build(),
                     ));
 
                     // Add open parenthise operator
                     result.push(Token(
                         TokenType::Operator(Operator::OpenParen),
-                        positioning.clone(),
+                        positioning.build(),
                     ));
 
                     // set seek_string_reenter to true to collect rest of string
@@ -390,7 +407,7 @@ pub fn lex(input: &String) -> Result<Vec<Token>, LexerError> {
     let mut seek_string_reenter = (false, '\0');
 
     // Create token position tracker
-    let mut positioning = FileLocation {
+    let mut positioning = FileLocationModel {
         start_line: 0,
         end_line: 0,
         start_col: 0,

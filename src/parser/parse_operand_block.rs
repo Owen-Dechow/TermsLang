@@ -1,5 +1,5 @@
 use crate::{
-    errors::ParserError,
+    errors::{FileLocation, ParserError},
     lexer::tokens::{Operator, Token, TokenType},
 };
 
@@ -99,7 +99,7 @@ fn parse_slice(
             OperandComponent::Operand(token) => {
                 return Err(ParserError(
                     "Unexpected operator where value should be found".to_string(),
-                    Some(token.1.clone()),
+                    (token.1.clone()),
                 ))
             }
         }
@@ -126,7 +126,7 @@ fn parse_slice(
                 if paren_depth <= -1 {
                     return Err(ParserError(
                         "Unmatched closing operand block found".to_string(),
-                        Some(pos.clone()),
+                        (pos.clone()),
                     ));
                 }
 
@@ -147,7 +147,7 @@ fn parse_slice(
                                     None => {
                                         return Err(ParserError(
                                             "Expected value right of uniary operator".to_string(),
-                                            Some(operand_token.1.clone()),
+                                            (operand_token.1.clone()),
                                         ))
                                     }
                                 };
@@ -155,7 +155,7 @@ fn parse_slice(
                                 if slice.len() == 0 {
                                     return Err(ParserError(
                                         "Expected value right of uniary operator".to_string(),
-                                        Some(operand_token.1.clone()),
+                                        (operand_token.1.clone()),
                                     ));
                                 }
 
@@ -173,7 +173,7 @@ fn parse_slice(
                                 None => {
                                     return Err(ParserError(
                                         "Expected value left of binary operator".to_string(),
-                                        Some(operand_token.1.clone()),
+                                        (operand_token.1.clone()),
                                     ))
                                 }
                             };
@@ -183,7 +183,7 @@ fn parse_slice(
                                 None => {
                                     return Err(ParserError(
                                         "Expected value right of binary operator".to_string(),
-                                        Some(operand_token.1.clone()),
+                                        (operand_token.1.clone()),
                                     ))
                                 }
                             };
@@ -191,14 +191,14 @@ fn parse_slice(
                             if slice_r.len() == 0 {
                                 return Err(ParserError(
                                     "Expected value right of binary operator".to_string(),
-                                    Some(operand_token.1.clone()),
+                                    (operand_token.1.clone()),
                                 ));
                             }
 
                             if slice_l.len() == 0 {
                                 return Err(ParserError(
                                     "Expected value left of binary operator".to_string(),
-                                    Some(operand_token.1.clone()),
+                                    (operand_token.1.clone()),
                                 ));
                             }
 
@@ -223,8 +223,8 @@ fn parse_slice(
     return Err(ParserError(
         "Operand parse falls through".to_string(),
         match slice.last() {
-            Some(OperandComponent::Operand(token)) => Some(token.1.clone()),
-            _ => None,
+            Some(OperandComponent::Operand(token)) => (token.1.clone()),
+            _ => FileLocation::EOF,
         },
     ));
 }
@@ -242,7 +242,7 @@ pub fn parse_operand_block(
                 None => {
                     return Err(ParserError(
                         "Expected end of operand block".to_string(),
-                        None,
+                        FileLocation::EOF,
                     ))
                 }
             };
@@ -276,7 +276,7 @@ pub fn parse_operand_block(
                 _ => {
                     return Err(ParserError(
                         "Unexpected token in operand block".to_string(),
-                        Some(token.1.clone()),
+                        (token.1.clone()),
                     ))
                 }
             };

@@ -1,5 +1,5 @@
 use crate::{
-    errors::ParserError,
+    errors::{FileLocation, ParserError},
     lexer::tokens::{Operator, Token, TokenType},
 };
 
@@ -31,13 +31,13 @@ pub fn get_associated_types(token_stream: &mut TokenStream) -> Result<Vec<Type>,
             Some(token) => {
                 return Err(ParserError(
                     "Unexpected token in associated type list".to_string(),
-                    Some(token.1.clone()),
+                    (token.1.clone()),
                 ))
             }
             None => {
                 return Err(ParserError(
                     "Expected associated type list close".to_string(),
-                    None,
+                    FileLocation::EOF,
                 ))
             }
         }
@@ -65,11 +65,16 @@ pub fn get_type_args(token_stream: &mut TokenStream) -> Result<Vec<String>, Pars
                 _ => {
                     return Err(ParserError(
                         "Unexpected token in place of type argument name".to_string(),
-                        Some(op.1.clone()),
+                        (op.1.clone()),
                     ))
                 }
             },
-            None => return Err(ParserError("Expected type argument name".to_string(), None)),
+            None => {
+                return Err(ParserError(
+                    "Expected type argument name".to_string(),
+                    FileLocation::EOF,
+                ))
+            }
         });
 
         match token_stream.advance() {
@@ -124,10 +129,15 @@ pub fn parse_type(token_stream: &mut TokenStream) -> Result<Type, ParserError> {
             Some(token) => {
                 return Err(ParserError(
                     "Unexpected token instead of closing bracket".to_string(),
-                    Some(token.1.clone()),
+                    (token.1.clone()),
                 ))
             }
-            None => return Err(ParserError("Expected closing bracket".to_string(), None)),
+            None => {
+                return Err(ParserError(
+                    "Expected closing bracket".to_string(),
+                    FileLocation::EOF,
+                ))
+            }
         }
     }
 
@@ -147,11 +157,16 @@ pub fn parse_var_sig(token_stream: &mut TokenStream) -> Result<VarSigniture, Par
             _ => {
                 return Err(ParserError(
                     "Unexpected token in place of varible name".to_string(),
-                    Some(op.1.clone()),
+                    (op.1.clone()),
                 ))
             }
         },
-        None => return Err(ParserError("Expected variable name".to_string(), None)),
+        None => {
+            return Err(ParserError(
+                "Expected variable name".to_string(),
+                FileLocation::EOF,
+            ))
+        }
     };
 
     // Return the new variable signiture

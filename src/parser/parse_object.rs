@@ -1,5 +1,5 @@
 use crate::{
-    errors::ParserError,
+    errors::{FileLocation, ParserError},
     lexer::tokens::{Operator, Token, TokenType},
 };
 
@@ -16,13 +16,13 @@ fn parse_call(token_stream: &mut TokenStream) -> Result<Call, ParserError> {
         Some(token) => {
             return Err(ParserError(
                 "Unexpected token in call arguments".to_string(),
-                Some(token.1.clone()),
+                (token.1.clone()),
             ))
         }
         None => {
             return Err(ParserError(
                 "Expected start of call arguments".to_string(),
-                None,
+                FileLocation::EOF,
             ))
         }
     };
@@ -58,7 +58,7 @@ fn parse_call(token_stream: &mut TokenStream) -> Result<Call, ParserError> {
         None => {
             return Err(ParserError(
                 "Expected close of call arguments".to_string(),
-                None,
+                FileLocation::EOF,
             ))
         }
     };
@@ -96,7 +96,7 @@ pub fn parse_object(token_stream: &mut TokenStream) -> Result<Object, ParserErro
                 Some(Token(TokenType::Operator(Operator::Dot), pos)) => {
                     return Err(ParserError(
                         "Cannot peek, call, or index identity at this location".to_string(),
-                        Some(pos.clone()),
+                        (pos.clone()),
                     ));
                 }
                 _ => {
@@ -110,11 +110,16 @@ pub fn parse_object(token_stream: &mut TokenStream) -> Result<Object, ParserErro
             _ => {
                 return Err(ParserError(
                     "Unexpected token in place of identity".to_string(),
-                    Some(token.1.clone()),
+                    (token.1.clone()),
                 ))
             }
         },
-        None => return Err(ParserError("Expected identity".to_string(), None)),
+        None => {
+            return Err(ParserError(
+                "Expected identity".to_string(),
+                FileLocation::EOF,
+            ))
+        }
     }
 }
 
@@ -128,13 +133,13 @@ pub fn parse_object_peekable(token_stream: &mut TokenStream) -> Result<Object, P
                         Some(Token(TokenType::Operator(Operator::OpenBracket), _)) => {
                             return Err(ParserError(
                                 "Cannot call identity at this location".to_string(),
-                                Some(pos.clone()),
+                                (pos.clone()),
                             ))
                         }
                         Some(Token(TokenType::Operator(Operator::OpenParen), _)) => {
                             return Err(ParserError(
                                 "Cannot index identity at this location".to_string(),
-                                Some(pos.clone()),
+                                (pos.clone()),
                             ))
                         }
                         _ => {
@@ -157,11 +162,16 @@ pub fn parse_object_peekable(token_stream: &mut TokenStream) -> Result<Object, P
             _ => {
                 return Err(ParserError(
                     "Unexpected token in place of identity".to_string(),
-                    Some(token.1.clone()),
+                    (token.1.clone()),
                 ));
             }
         },
-        None => return Err(ParserError("Expected identity".to_string(), None)),
+        None => {
+            return Err(ParserError(
+                "Expected identity".to_string(),
+                FileLocation::EOF,
+            ))
+        }
     }
 }
 
@@ -230,11 +240,16 @@ pub fn parse_object_peekable_callable(
             _ => {
                 return Err(ParserError(
                     "Unexpected token in place of identity".to_string(),
-                    Some(token.1.clone()),
+                    (token.1.clone()),
                 ));
             }
         },
-        None => return Err(ParserError("Expected identity".to_string(), None)),
+        None => {
+            return Err(ParserError(
+                "Expected identity".to_string(),
+                FileLocation::EOF,
+            ))
+        }
     }
 }
 
@@ -244,10 +259,15 @@ pub fn parse_object_create(token_stream: &mut TokenStream) -> Result<ObjectCreat
         Some(token) => {
             return Err(ParserError(
                 "Unexpected token in object creation".to_string(),
-                Some(token.1.clone()),
+                (token.1.clone()),
             ))
         }
-        None => return Err(ParserError("Expected creation operator".to_string(), None)),
+        None => {
+            return Err(ParserError(
+                "Expected creation operator".to_string(),
+                FileLocation::EOF,
+            ))
+        }
     };
 
     let call = parse_call(token_stream)?;

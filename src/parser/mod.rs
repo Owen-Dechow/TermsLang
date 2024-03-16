@@ -42,7 +42,7 @@ impl TokenStream {
             0,
             Token(
                 TokenType::Terminate,
-                FileLocation {
+                FileLocation::Loc {
                     start_line: 0,
                     end_line: 0,
                     start_col: 0,
@@ -178,11 +178,16 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                 _ => {
                     return Err(ParserError(
                         "Unexpected token instead of function name".to_string(),
-                        Some(op.1),
+                        op.1,
                     ))
                 }
             },
-            None => return Err(ParserError("Expected function name".to_string(), None)),
+            None => {
+                return Err(ParserError(
+                    "Expected function name".to_string(),
+                    FileLocation::EOF,
+                ))
+            }
         };
 
         // Burn identity arg separator in function signiture
@@ -191,13 +196,13 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             Some(token) => {
                 return Err(ParserError(
                     "Unexpected token in function signiture".to_string(),
-                    Some(token.1.clone()),
+                    token.1.clone(),
                 ))
             }
             None => {
                 return Err(ParserError(
                     "Premature end to function signiture".to_string(),
-                    None,
+                    FileLocation::EOF,
                 ))
             }
         };
@@ -227,7 +232,12 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                 //  Ensure token exits else return syntax error
                 let token = match token_stream.advance() {
                     Some(token) => token,
-                    None => return Err(ParserError("Expected function body".to_string(), None)),
+                    None => {
+                        return Err(ParserError(
+                            "Expected function body".to_string(),
+                            FileLocation::EOF,
+                        ))
+                    }
                 };
 
                 // If state of function block found exit loop
@@ -250,10 +260,15 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                     Some(token) => {
                         return Err(ParserError(
                             "Unexpected token in function signiture".to_string(),
-                            Some(token.1.clone()),
+                            token.1.clone(),
                         ))
                     }
-                    None => return Err(ParserError("Expected function body".to_string(), None)),
+                    None => {
+                        return Err(ParserError(
+                            "Expected function body".to_string(),
+                            FileLocation::EOF,
+                        ))
+                    }
                 }
             }
 
@@ -302,11 +317,16 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                 _ => {
                     return Err(ParserError(
                         "Unexpected token in place of variable name".to_string(),
-                        Some(op.1),
+                        op.1,
                     ))
                 }
             },
-            None => return Err(ParserError("Expected type variable name".to_string(), None)),
+            None => {
+                return Err(ParserError(
+                    "Expected type variable name".to_string(),
+                    FileLocation::EOF,
+                ))
+            }
         };
 
         match token_stream.advance() {
@@ -314,7 +334,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             Some(Token(_, pos)) => {
                 return Err(ParserError(
                     "Invalid token expected set operator".to_string(),
-                    Some(pos.clone()),
+                    pos.clone(),
                 ))
             }
             None => todo!(),
@@ -352,20 +372,20 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                 _ => {
                     return Err(ParserError(
                         "Unexpected operator in update operation".to_string(),
-                        Some(pos.clone()),
+                        pos.clone(),
                     ))
                 }
             },
             Some(Token(_, pos)) => {
                 return Err(ParserError(
                     "Unexpected token in update operation".to_string(),
-                    Some(pos.clone()),
+                    pos.clone(),
                 ))
             }
             None => {
                 return Err(ParserError(
                     "Expected set operator or set operator variant".to_string(),
-                    None,
+                    FileLocation::EOF,
                 ))
             }
         }
@@ -400,11 +420,16 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                     _ => {
                         return Err(ParserError(
                             "Unexpected token in else declaration".to_string(),
-                            Some(token.1.clone()),
+                            token.1.clone(),
                         ))
                     }
                 },
-                None => return Err(ParserError("Expected else body".to_string(), None)),
+                None => {
+                    return Err(ParserError(
+                        "Expected else body".to_string(),
+                        FileLocation::EOF,
+                    ))
+                }
             },
             _ => {
                 token_stream.back();
@@ -429,11 +454,16 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                 _ => {
                     return Err(ParserError(
                         "Unexpected token in place of loop counter name".to_string(),
-                        Some(op.1),
+                        op.1,
                     ))
                 }
             },
-            None => return Err(ParserError("Expected loop counter name".to_string(), None)),
+            None => {
+                return Err(ParserError(
+                    "Expected loop counter name".to_string(),
+                    FileLocation::EOF,
+                ))
+            }
         };
 
         // Burn var conditional seperator
@@ -442,14 +472,14 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             Some(token) => {
                 return Err(ParserError(
                     "Unexpected token in loop signiture".to_string(),
-                    Some(token.1.clone()),
+                    (token.1.clone()),
                 ))
             }
 
             None => {
                 return Err(ParserError(
                     "Premeture end to loop definition".to_string(),
-                    None,
+                    FileLocation::EOF,
                 ))
             }
         };
@@ -475,11 +505,16 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                 _ => {
                     return Err(ParserError(
                         "Unexpected token at after break".to_string(),
-                        Some(token.1.clone()),
+                        (token.1.clone()),
                     ))
                 }
             },
-            None => return Err(ParserError("Expected line terminator".to_string(), None)),
+            None => {
+                return Err(ParserError(
+                    "Expected line terminator".to_string(),
+                    FileLocation::EOF,
+                ))
+            }
         };
     }
 
@@ -491,11 +526,16 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                 _ => {
                     return Err(ParserError(
                         "Unexpected token at after continue".to_string(),
-                        Some(token.1.clone()),
+                        (token.1.clone()),
                     ))
                 }
             },
-            None => return Err(ParserError("Expected line terminator".to_string(), None)),
+            None => {
+                return Err(ParserError(
+                    "Expected line terminator".to_string(),
+                    FileLocation::EOF,
+                ))
+            }
         };
     }
 
@@ -516,11 +556,16 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                 _ => {
                     return Err(ParserError(
                         "Unexpected token at after continue".to_string(),
-                        Some(token.1.clone()),
+                        (token.1.clone()),
                     ))
                 }
             },
-            None => return Err(ParserError("Expected line terminator".to_string(), None)),
+            None => {
+                return Err(ParserError(
+                    "Expected line terminator".to_string(),
+                    FileLocation::EOF,
+                ))
+            }
         };
     }
 
@@ -532,11 +577,16 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                 _ => {
                     return Err(ParserError(
                         "Unexpected token in place of class name".to_string(),
-                        Some(op.1),
+                        (op.1).clone(),
                     ))
                 }
             },
-            None => return Err(ParserError("Expected class name".to_string(), None)),
+            None => {
+                return Err(ParserError(
+                    "Expected class name".to_string(),
+                    FileLocation::EOF,
+                ))
+            }
         };
 
         // Burn identity parent separator in function signiture
@@ -545,13 +595,13 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             Some(token) => {
                 return Err(ParserError(
                     "Unexpected token in class definition".to_string(),
-                    Some(token.1.clone()),
+                    (token.1.clone()),
                 ))
             }
             None => {
                 return Err(ParserError(
                     "Premature end to class definition".to_string(),
-                    None,
+                    FileLocation::EOF,
                 ))
             }
         };
@@ -573,13 +623,13 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             Some(token) => {
                 return Err(ParserError(
                     "Unexpected token in class definition".to_string(),
-                    Some(token.1.clone()),
+                    (token.1.clone()),
                 ))
             }
             None => {
                 return Err(ParserError(
                     "Premature end to class definition".to_string(),
-                    None,
+                    FileLocation::EOF,
                 ))
             }
         };
@@ -605,14 +655,14 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                                 _ => {
                                     return Err(ParserError(
                                         "Unexpected token in static func definition".to_string(),
-                                        None,
+                                        FileLocation::EOF,
                                     ))
                                 }
                             },
                             _ => {
                                 return Err(ParserError(
                                     "Expected func definition".to_string(),
-                                    None,
+                                    FileLocation::EOF,
                                 ))
                             }
                         };
@@ -639,13 +689,13 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                             Some(token) => {
                                 return Err(ParserError(
                                     "Unexpected token in property definition".to_string(),
-                                    Some(token.1.clone()),
+                                    (token.1.clone()),
                                 ))
                             }
                             None => {
                                 return Err(ParserError(
                                     "Expected line terminator".to_string(),
-                                    None,
+                                    FileLocation::EOF,
                                 ))
                             }
                         };
@@ -655,11 +705,16 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                     _ => {
                         return Err(ParserError(
                             "Unexpected token within class block".to_string(),
-                            Some(token.1.clone()),
+                            (token.1.clone()),
                         ))
                     }
                 },
-                None => return Err(ParserError("Expected class block close".to_string(), None)),
+                None => {
+                    return Err(ParserError(
+                        "Expected class block close".to_string(),
+                        FileLocation::EOF,
+                    ))
+                }
             }
         }
 
@@ -673,7 +728,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
 
     return Err(ParserError(
         "Unrecognized term".to_string(),
-        Some(lead_token.1.clone()),
+        (lead_token.1.clone()),
     ));
 }
 
@@ -694,12 +749,9 @@ fn parse_block(
                     terms: Vec::<Term>::new(),
                 },
                 Some(token) => {
-                    return Err(ParserError(
-                        "Expected block".to_string(),
-                        Some(token.1.clone()),
-                    ))
+                    return Err(ParserError("Expected block".to_string(), (token.1.clone())))
                 }
-                None => return Err(ParserError("Expected block".to_string(), None)),
+                None => return Err(ParserError("Expected block".to_string(), FileLocation::EOF)),
             }
         }
     };
@@ -729,10 +781,15 @@ fn parse_block(
             Some(Token(_, pos)) => {
                 return Err(ParserError(
                     "Unexpected token at block closing".to_string(),
-                    Some(pos.clone()),
+                    (pos.clone()),
                 ))
             }
-            None => return Err(ParserError("Expected block close".to_string(), None)),
+            None => {
+                return Err(ParserError(
+                    "Expected block close".to_string(),
+                    FileLocation::EOF,
+                ))
+            }
         }
     }
 }
