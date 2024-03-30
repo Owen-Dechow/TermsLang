@@ -60,8 +60,8 @@ macro_rules! prettify_macro {
                     // Return pretty message
                     return msg;
                 }
-                // File position not attached (assume file ended early)
-                FileLocation::EOF => {
+                // End of file
+                FileLocation::End => {
                     // Get he initall message
                     let mut msg = format!("{t} ({})", err_msg);
 
@@ -75,6 +75,12 @@ macro_rules! prettify_macro {
                     msg += format!("\n\t{line}\n\t{underline}").as_str();
 
                     // Return pretty message
+                    return msg;
+                }
+                // File position non existent
+                FileLocation::None => {
+                    // Get he initall message
+                    let msg = format!("{t} ({})", err_msg);
                     return msg;
                 }
             }

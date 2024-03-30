@@ -103,13 +103,13 @@ pub struct VarSigniture {
     pub argtype: Type,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Method {
     pub func: Term,
     pub is_static: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Term {
     Block {
         terms: Vec<Term>,
@@ -185,7 +185,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             None => {
                 return Err(ParserError(
                     "Expected function name".to_string(),
-                    FileLocation::EOF,
+                    FileLocation::End,
                 ))
             }
         };
@@ -202,7 +202,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             None => {
                 return Err(ParserError(
                     "Premature end to function signiture".to_string(),
-                    FileLocation::EOF,
+                    FileLocation::End,
                 ))
             }
         };
@@ -235,7 +235,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                     None => {
                         return Err(ParserError(
                             "Expected function body".to_string(),
-                            FileLocation::EOF,
+                            FileLocation::End,
                         ))
                     }
                 };
@@ -266,7 +266,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                     None => {
                         return Err(ParserError(
                             "Expected function body".to_string(),
-                            FileLocation::EOF,
+                            FileLocation::End,
                         ))
                     }
                 }
@@ -324,7 +324,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             None => {
                 return Err(ParserError(
                     "Expected type variable name".to_string(),
-                    FileLocation::EOF,
+                    FileLocation::End,
                 ))
             }
         };
@@ -385,7 +385,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             None => {
                 return Err(ParserError(
                     "Expected set operator or set operator variant".to_string(),
-                    FileLocation::EOF,
+                    FileLocation::End,
                 ))
             }
         }
@@ -427,7 +427,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                 None => {
                     return Err(ParserError(
                         "Expected else body".to_string(),
-                        FileLocation::EOF,
+                        FileLocation::End,
                     ))
                 }
             },
@@ -461,7 +461,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             None => {
                 return Err(ParserError(
                     "Expected loop counter name".to_string(),
-                    FileLocation::EOF,
+                    FileLocation::End,
                 ))
             }
         };
@@ -479,7 +479,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             None => {
                 return Err(ParserError(
                     "Premeture end to loop definition".to_string(),
-                    FileLocation::EOF,
+                    FileLocation::End,
                 ))
             }
         };
@@ -512,7 +512,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             None => {
                 return Err(ParserError(
                     "Expected line terminator".to_string(),
-                    FileLocation::EOF,
+                    FileLocation::End,
                 ))
             }
         };
@@ -533,7 +533,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             None => {
                 return Err(ParserError(
                     "Expected line terminator".to_string(),
-                    FileLocation::EOF,
+                    FileLocation::End,
                 ))
             }
         };
@@ -563,7 +563,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             None => {
                 return Err(ParserError(
                     "Expected line terminator".to_string(),
-                    FileLocation::EOF,
+                    FileLocation::End,
                 ))
             }
         };
@@ -584,7 +584,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             None => {
                 return Err(ParserError(
                     "Expected class name".to_string(),
-                    FileLocation::EOF,
+                    FileLocation::End,
                 ))
             }
         };
@@ -601,7 +601,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             None => {
                 return Err(ParserError(
                     "Premature end to class definition".to_string(),
-                    FileLocation::EOF,
+                    FileLocation::End,
                 ))
             }
         };
@@ -629,7 +629,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             None => {
                 return Err(ParserError(
                     "Premature end to class definition".to_string(),
-                    FileLocation::EOF,
+                    FileLocation::End,
                 ))
             }
         };
@@ -655,14 +655,14 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                                 _ => {
                                     return Err(ParserError(
                                         "Unexpected token in static func definition".to_string(),
-                                        FileLocation::EOF,
+                                        FileLocation::End,
                                     ))
                                 }
                             },
                             _ => {
                                 return Err(ParserError(
                                     "Expected func definition".to_string(),
-                                    FileLocation::EOF,
+                                    FileLocation::End,
                                 ))
                             }
                         };
@@ -695,7 +695,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                             None => {
                                 return Err(ParserError(
                                     "Expected line terminator".to_string(),
-                                    FileLocation::EOF,
+                                    FileLocation::End,
                                 ))
                             }
                         };
@@ -712,7 +712,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                 None => {
                     return Err(ParserError(
                         "Expected class block close".to_string(),
-                        FileLocation::EOF,
+                        FileLocation::End,
                     ))
                 }
             }
@@ -751,7 +751,7 @@ fn parse_block(
                 Some(token) => {
                     return Err(ParserError("Expected block".to_string(), token.1.clone()))
                 }
-                None => return Err(ParserError("Expected block".to_string(), FileLocation::EOF)),
+                None => return Err(ParserError("Expected block".to_string(), FileLocation::End)),
             }
         }
     };
@@ -787,7 +787,7 @@ fn parse_block(
             None => {
                 return Err(ParserError(
                     "Expected block close".to_string(),
-                    FileLocation::EOF,
+                    FileLocation::End,
                 ))
             }
         }

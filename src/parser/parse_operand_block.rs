@@ -224,7 +224,7 @@ fn parse_slice(
         "Operand parse falls through".to_string(),
         match slice.last() {
             Some(OperandComponent::Operand(token)) => token.1.clone(),
-            _ => FileLocation::EOF,
+            _ => FileLocation::End,
         },
     ));
 }
@@ -242,7 +242,7 @@ pub fn parse_operand_block(
                 None => {
                     return Err(ParserError(
                         "Expected end of operand block".to_string(),
-                        FileLocation::EOF,
+                        FileLocation::End,
                     ))
                 }
             };

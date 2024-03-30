@@ -37,7 +37,7 @@ pub fn get_associated_types(token_stream: &mut TokenStream) -> Result<Vec<Type>,
             None => {
                 return Err(ParserError(
                     "Expected associated type list close".to_string(),
-                    FileLocation::EOF,
+                    FileLocation::End,
                 ))
             }
         }
@@ -72,7 +72,7 @@ pub fn get_type_args(token_stream: &mut TokenStream) -> Result<Vec<String>, Pars
             None => {
                 return Err(ParserError(
                     "Expected type argument name".to_string(),
-                    FileLocation::EOF,
+                    FileLocation::End,
                 ))
             }
         });
@@ -135,7 +135,7 @@ pub fn parse_type(token_stream: &mut TokenStream) -> Result<Type, ParserError> {
             None => {
                 return Err(ParserError(
                     "Expected closing bracket".to_string(),
-                    FileLocation::EOF,
+                    FileLocation::End,
                 ))
             }
         }
@@ -164,7 +164,7 @@ pub fn parse_var_sig(token_stream: &mut TokenStream) -> Result<VarSigniture, Par
         None => {
             return Err(ParserError(
                 "Expected variable name".to_string(),
-                FileLocation::EOF,
+                FileLocation::End,
             ))
         }
     };

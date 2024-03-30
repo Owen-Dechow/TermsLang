@@ -1,21 +1,10 @@
 use crate::{
+    avtive_parser::ActiveParse,
     errors::{FileLocation, RuntimeError},
-    parser::Term,
 };
 
 fn run_term() {}
 
-pub fn interpret(program: Term) -> Result<(), RuntimeError> {
-    match program {
-        Term::Block { terms } => {
-            for _term in terms {
-                run_term()
-            }
-            Ok(())
-        }
-        _ => Err(RuntimeError(
-            "Invalid program parse received".to_string(),
-            FileLocation::EOF,
-        )),
-    }
+pub fn interpret(program: ActiveParse) -> Result<(), RuntimeError> {
+    return Ok(());
 }

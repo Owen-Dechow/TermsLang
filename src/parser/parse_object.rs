@@ -22,7 +22,7 @@ fn parse_call(token_stream: &mut TokenStream) -> Result<Call, ParserError> {
         None => {
             return Err(ParserError(
                 "Expected start of call arguments".to_string(),
-                FileLocation::EOF,
+                FileLocation::End,
             ))
         }
     };
@@ -58,7 +58,7 @@ fn parse_call(token_stream: &mut TokenStream) -> Result<Call, ParserError> {
         None => {
             return Err(ParserError(
                 "Expected close of call arguments".to_string(),
-                FileLocation::EOF,
+                FileLocation::End,
             ))
         }
     };
@@ -117,7 +117,7 @@ pub fn parse_object(token_stream: &mut TokenStream) -> Result<Object, ParserErro
         None => {
             return Err(ParserError(
                 "Expected identity".to_string(),
-                FileLocation::EOF,
+                FileLocation::End,
             ))
         }
     }
@@ -169,7 +169,7 @@ pub fn parse_object_peekable(token_stream: &mut TokenStream) -> Result<Object, P
         None => {
             return Err(ParserError(
                 "Expected identity".to_string(),
-                FileLocation::EOF,
+                FileLocation::End,
             ))
         }
     }
@@ -247,7 +247,7 @@ pub fn parse_object_peekable_callable(
         None => {
             return Err(ParserError(
                 "Expected identity".to_string(),
-                FileLocation::EOF,
+                FileLocation::End,
             ))
         }
     }
@@ -265,7 +265,7 @@ pub fn parse_object_create(token_stream: &mut TokenStream) -> Result<ObjectCreat
         None => {
             return Err(ParserError(
                 "Expected creation operator".to_string(),
-                FileLocation::EOF,
+                FileLocation::End,
             ))
         }
     };

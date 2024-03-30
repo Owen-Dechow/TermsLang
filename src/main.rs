@@ -1,3 +1,4 @@
+mod avtive_parser;
 pub mod errors;
 pub mod interpretor;
 pub mod lexer;
@@ -30,9 +31,17 @@ fn main() {
         }
     };
 
+    // Active parse
+    let active_parse_out = match avtive_parser::activate_parse(parse_out) {
+        Ok(active_parse) => active_parse,
+        Err(err) => {
+            panic!("{}", err.prettify(&program));
+        }
+    };
+
     // Run prog
-    let _interpretor_out = match interpretor::interpret(parse_out) {
-        Ok(_) => {}
+    let _interpretor_out = match interpretor::interpret(active_parse_out) {
+        Ok(intperpretation) => intperpretation,
         Err(err) => {
             panic!("{}", err.prettify(&program));
         }
