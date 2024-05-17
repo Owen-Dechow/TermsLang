@@ -47,48 +47,6 @@ pub fn get_associated_types(token_stream: &mut TokenStream) -> Result<Vec<Type>,
     return Ok(associated_types);
 }
 
-// Get type args: <T, T2>
-pub fn get_type_args(token_stream: &mut TokenStream) -> Result<Vec<String>, ParserError> {
-    // Create type args list
-    let mut type_args = Vec::<String>::new();
-
-    // Get args
-    loop {
-        if let Some(Token(TokenType::Operator(Operator::Greater), _)) = token_stream.advance() {
-            break;
-        }
-
-        token_stream.back();
-        type_args.push(match token_stream.advance() {
-            Some(op) => match &op.0 {
-                TokenType::Identity(id) => id.to_owned(),
-                _ => {
-                    return Err(ParserError(
-                        "Unexpected token in place of type argument name".to_string(),
-                        op.1.clone(),
-                    ))
-                }
-            },
-            None => {
-                return Err(ParserError(
-                    "Expected type argument name".to_string(),
-                    FileLocation::End,
-                ))
-            }
-        });
-
-        match token_stream.advance() {
-            Some(Token(TokenType::Operator(Operator::Comma), _)) => {}
-            _ => {
-                token_stream.back();
-            }
-        };
-    }
-
-    // Return list
-    return Ok(type_args);
-}
-
 // Parse a type identifier
 pub fn parse_type(token_stream: &mut TokenStream) -> Result<Type, ParserError> {
     // Get the typename token

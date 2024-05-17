@@ -90,7 +90,6 @@ pub enum ObjectType {
 
 #[derive(Debug, Clone)]
 pub struct Call {
-    pub typeargs: Vec<Type>,
     pub args: Vec<OperandExpression>,
 }
 
@@ -117,7 +116,6 @@ pub enum Term {
     Func {
         name: String,
         returntype: Type,
-        typeargs: Vec<String>,
         args: Vec<VarSigniture>,
         block: Box<Term>,
     },
@@ -156,9 +154,8 @@ pub enum Term {
     Call {
         value: OperandExpression,
     },
-    Class {
+    Struct {
         name: String,
-        parent: Option<Type>,
         properties: Vec<VarSigniture>,
         methods: Vec<Method>,
     },
@@ -204,21 +201,6 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                     "Premature end to function signiture".to_string(),
                     FileLocation::End,
                 ))
-            }
-        };
-
-        // Get type args of function
-        let typeargs = {
-            match token_stream.advance() {
-                // Return found type args
-                Some(Token(TokenType::Operator(Operator::Less), _)) => {
-                    parse_type::get_type_args(token_stream)?
-                }
-                _ => {
-                    // Return if no type args found
-                    token_stream.back();
-                    Vec::<String>::new()
-                }
             }
         };
 
@@ -288,7 +270,6 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             returntype,
             args,
             block,
-            typeargs,
         });
     }
 
@@ -570,7 +551,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
     }
 
     // Parse class
-    if let Token(TokenType::KeyWord(KeyWord::Class), _) = lead_token {
+    if let Token(TokenType::KeyWord(KeyWord::Struct), _) = lead_token {
         let name = match token_stream.advance().cloned() {
             Some(op) => match op.0 {
                 TokenType::Identity(id) => id,
@@ -586,34 +567,6 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                     "Expected class name".to_string(),
                     FileLocation::End,
                 ))
-            }
-        };
-
-        // Burn identity parent separator in function signiture
-        match token_stream.advance() {
-            Some(Token(TokenType::Operator(Operator::Colon), _)) => {}
-            Some(token) => {
-                return Err(ParserError(
-                    "Unexpected token in class definition".to_string(),
-                    token.1.clone(),
-                ))
-            }
-            None => {
-                return Err(ParserError(
-                    "Premature end to class definition".to_string(),
-                    FileLocation::End,
-                ))
-            }
-        };
-
-        let parent = match token_stream.advance() {
-            Some(Token(TokenType::Identity(_), _)) => {
-                token_stream.back();
-                Some(parse_type(token_stream)?)
-            }
-            _ => {
-                token_stream.back();
-                None
             }
         };
 
@@ -718,9 +671,8 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             }
         }
 
-        return Ok(Term::Class {
+        return Ok(Term::Struct {
             name,
-            parent,
             properties,
             methods,
         });

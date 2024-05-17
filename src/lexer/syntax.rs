@@ -59,7 +59,7 @@ pub fn get_syntax_map() -> SyntaxMap<'static> {
             ("print", KeyWord::Print),
             ("println", KeyWord::PrintLn),
             ("readln", KeyWord::ReadLn),
-            ("class", KeyWord::Class),
+            ("struct", KeyWord::Struct),
             ("if", KeyWord::If),
             ("else", KeyWord::Else),
             ("func", KeyWord::Func),

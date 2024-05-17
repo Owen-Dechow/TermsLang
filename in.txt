@@ -1,5 +1,5 @@
 # FizzBuzz class
-class FizzBuzz: {
+struct FizzBuzz {
 
     # FizzBuzz initializer
     func null @new: {

@@ -90,7 +90,7 @@ pub enum KeyWord {
     Print,
     PrintLn,
     ReadLn,
-    Class,
+    Struct,
     If,
     Else,
     Func,

@@ -6,7 +6,7 @@ use crate::{
 use super::{
     parse_operand_block::{parse_operand_block, OperandExpression},
     parse_type::parse_type,
-    Call, Object, ObjectCreate, ObjectType, TokenStream, Type,
+    Call, Object, ObjectCreate, ObjectType, TokenStream,
 };
 
 // Parse function call
@@ -22,42 +22,6 @@ fn parse_call(token_stream: &mut TokenStream) -> Result<Call, ParserError> {
         None => {
             return Err(ParserError(
                 "Expected start of call arguments".to_string(),
-                FileLocation::End,
-            ))
-        }
-    };
-
-    let typeargs = match token_stream.advance() {
-        Some(Token(TokenType::Operator(Operator::Less), _)) => {
-            let mut typeargs = Vec::<Type>::new();
-            loop {
-                if let Some(Token(TokenType::Operator(Operator::Greater), _)) =
-                    token_stream.advance()
-                {
-                    break;
-                }
-
-                token_stream.back();
-                typeargs.push(parse_type(token_stream)?);
-
-                match token_stream.advance() {
-                    Some(Token(TokenType::Operator(Operator::Comma), _)) => {}
-                    _ => {
-                        token_stream.back();
-                    }
-                };
-            }
-
-            typeargs
-        }
-
-        Some(_) => {
-            token_stream.back();
-            Vec::<Type>::new()
-        }
-        None => {
-            return Err(ParserError(
-                "Expected close of call arguments".to_string(),
                 FileLocation::End,
             ))
         }
@@ -85,7 +49,7 @@ fn parse_call(token_stream: &mut TokenStream) -> Result<Call, ParserError> {
         }
     }
 
-    return Ok(Call { typeargs, args });
+    return Ok(Call { args });
 }
 
 // Parse identity object Nonpeekable, Noncallable
