@@ -51,14 +51,5 @@ Depending on `.md` renderer example may not display color.
 ## Compiler
 - [x] Main Lexer
 - [x] Main Parser
-- [ ] Main LLVM Compiler
+- [ ] Main Active Parser
 - [ ] Version 1.0
-
-Main implimentations are not fully complete for `v1.0` goals see [Still in development](still-in-development)
-
-The goal of `TermsLang` is to be compiled using LLVM any interpreter or transpiler is temperary and to be used for testing.
-
-## Still in development
-* String escape sequences
-* Better error messages
-* Standard library
