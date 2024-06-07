@@ -7,58 +7,46 @@ The terms programming language
 
 ## Example
 Depending on `.md` renderer example may not display color.
-<pre style="color:darkgray">
-<span style="color:slategray;font-style:italic"># FizzBuzz class</span>
-<span style="color:mediumorchid">class</span> <span style="color:tan">FizzBuzz</span>: {
+<pre color="darkgrey">
+<code>
+<span style="color: grey"># Custom Struct</span>
+<span style="color: orchid">struct</span> MyCustomStruct {}
 
-    <span style="color:slategray;font-style:italic"># FizzBuzz initializer</span>
-    <span style="color:mediumorchid">func</span> <span style="color:steelblue">null</span> <span style="color:tan">@new</span>: {
-        <span style="color:mediumorchid">println</span> <span style="color:#03C03C">"FizzBuzz Object Created"</span>;
-    }
+<span style="color: grey"># Declare a Function</span>
+<span style="color: orchid">func</span> null do_a_thing<span style="color: tan">:</span> {
+    <span style="color: grey"># Get user name</span>
+    <span style="color: orchid">print</span> <span style="color: #FF4500">"What is your name? "</span>
+    <span style="color: orchid">let</span> str name = <span style="color: #FF4500">""</span><span style="color: tan">;</span>
+    <span style="color: orchid">readln</span> name<span style="color: tan">;</span>
+    <span style="color: orchid">println</span> f<span style="color: #FF4500">"Hello, {name}"</span>
 
-    <span style="color:slategray;font-style:italic"># Run function</span>
-    <span style="color:mediumorchid">func</span> <span style="color:steelblue">null</span> <span style="color:tan">run</span>: <span style="color:steelblue"><span style="color:steelblue">int</span></span> <span style="color:tan">n</span> {
-        <span style="color:slategray;font-style:italic"># Loop n times</span>
-        <span style="color:mediumorchid">loop</span> <span style="color:tan">i</span>: <span style="color:tan">i</span> < <span style="color:tan">n</span> {
-
-            <span style="color:slategray;font-style:italic"># Declare result var</span>
-            <span style="color:mediumorchid">let</span> <span style="color:steelblue">str</span> <span style="color:tan">result</span> = <span style="color:#03C03C">""</span>;
-
-            <span style="color:mediumorchid">if</span> <span style="color:tan">i</span> % <span style="color:goldenrod">3</span> == <span style="color:goldenrod">0</span> {
-                <span style="color:slategray;font-style:italic"># Update result var</span>
-                <span style="color:mediumorchid">updt</span> <span style="color:tan">result</span> += <span style="color:#03C03C">"Fizz"</span>;
-            }
-
-            <span style="color:mediumorchid">if</span> <span style="color:tan">i</span> % <span style="color:goldenrod">5</span> == <span style="color:goldenrod">0</span> {
-                <span style="color:slategray;font-style:italic"># Update result var</span>
-                <span style="color:mediumorchid">updt</span> <span style="color:tan">result</span> += <span style="color:#03C03C">"Buzz"</span>;
-            }
-
-            <span style="color:slategray;font-style:italic"># Check if no Fizz or Buzz</span>
-            <span style="color:mediumorchid">if</span> <span style="color:tan">result</span> == <span style="color:#03C03C">""</span> {
-                <span style="color:slategray;font-style:italic"># Print number (i)</span>
-                <span style="color:mediumorchid">println</span> <span style="color:goldenrod"><span style="color:tan">i</span></span>;
-                
-                <span style="color:slategray;font-style:italic"># Exit function early</span>
-                <span style="color:mediumorchid">return</span> <span style="color:steelblue">null</span>;
-            }
-
-            <span style="color:slategray;font-style:italic"># Print result</span>
-            <span style="color:mediumorchid">println</span> <span style="color:tan">result</span>;
+    <span style="color: grey"># Create loop</span>
+    <span style="color: orchid">loop</span> i: i <span style="color: tan"><</span> 100 {
+        <span style="color: orchid">print</span> <span style="color: #FF4500">"Number: {i}"</span><span style="color: tan">;</span>
+        
+        <span style="color: orchid">if</span> i <span style="color: tan"><</span> 10 {
+            <span style="color: orchid">continue</span><span style="color: tan">;</span>
+        } <span style="color: orchid">else</span> {
+            <span style="color: orchid">break</span><span style="color: tan">;</span>
         }
     }
+
+    <span style="color: orchid">updt</span> name = <span style="color: #FF4500">"My New Value"</span><span style="color: tan">;</span>
+    <span style="color: orchid">println</span> name<span style="color: tan">;</span>
 }
 
-<span style="color:slategray;font-style:italic"># main function</span>
-<span style="color:mediumorchid">func</span> <span style="color:steelblue">null</span> <span style="color:tan">main</span>: <span style="color:steelblue">str</span>[] <span style="color:tan">args</span> {
+<span style="color: grey"># main function</span>
+<span style="color: orchid">func</span> null main: str[] args {
 
-    <span style="color:slategray;font-style:italic"># Create FizzBuzz instance</span>
-    <span style="color:mediumorchid">let</span> <span style="color:tan">FizzBuzz</span> <span style="color:tan">fizzy</span> = $() <span style="color:tan">FizzBuzz</span>;
+    <span style="color: grey"># Create MyCustomStruct Instance</span>
+    <span style="color: orchid">let</span> MyCustomStruct my_instance = $() MyCustomStruct<span style="color: tan">;</span>
 
-    <span style="color:slategray;font-style:italic"># Call run function</span>
-    <span style="color:mediumorchid">cll</span> <span style="color:tan">fizzy</span>.<span style="color:tan">run</span>.(<span style="color:goldenrod">100</span>);
+    <span style="color: grey"># Call a Function</span>
+    <span style="color: orchid">cll</span> do_a_thing.(100)<span style="color: tan">;</span>
 }
+</code>
 </pre>
+
 
 ## Compiler
 - [x] Main Lexer
