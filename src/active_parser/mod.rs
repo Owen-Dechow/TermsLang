@@ -43,6 +43,10 @@ pub enum ActiveParse {
     Call {
         operand_expression: ActiveOperandExpression,
     },
+    Print {
+        ln: bool,
+        value: ActiveOperandExpression,
+    },
 }
 
 enum ActiveOperandExpression {
@@ -91,7 +95,9 @@ enum ActiveLiteral {
 
 enum ActivateObjectCreate {}
 
-enum ActiveObject {}
+enum ActiveObject {
+    Temp,
+}
 
 #[derive(Debug)]
 struct VarRegistry<'a> {
@@ -118,6 +124,10 @@ impl<'a> VarRegistry<'a> {
             tree_connection: VarRegistryTreeConnection::Child { parent: self },
             objects: HashMap::new(),
         }
+    }
+
+    fn get_base_type_id(&self, base_type_string: &str) -> Result<u32, ActiveParserError> {
+        self.get_id_of_string(&base_type_string.to_string())
     }
 
     fn add_var(&mut self, name: String, _type: &Type) -> Result<u32, ActiveParserError> {
@@ -201,6 +211,16 @@ impl<'a> VarRegistry<'a> {
     fn uid(&self) -> u32 {
         return rand::random();
     }
+
+    fn confirm_var(
+        &self,
+        object: &Object,
+        _type: u32,
+        writable: bool,
+    ) -> Result<(), ActiveParserError> {
+        println!("WARNING: IGNORED CONFIRM VAR");
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
@@ -254,7 +274,10 @@ fn activate_print_parse(
     var_registry: &mut VarRegistry<'_>,
 ) -> Result<ActiveParse, ActiveParserError> {
     if let Term::Print { ln, operand_block } = term {
-        todo!("print term")
+        return Ok(ActiveParse::Print {
+            ln,
+            value: activate_operand_block(operand_block, var_registry)?,
+        });
     } else {
         Err(ActiveParserError(
             "Expected print term".to_string(),
@@ -276,7 +299,7 @@ fn activate_var_declaration_parse(
         var_registry.add_var(name.clone(), &vartype)?;
         Ok(ActiveParse::VarDeclation {
             name,
-            value: activate_operand_block(value)?,
+            value: activate_operand_block(value, &var_registry)?,
         })
     } else {
         Err(ActiveParserError(
@@ -288,6 +311,7 @@ fn activate_var_declaration_parse(
 
 fn activate_operand_block(
     block: OperandExpression,
+    var_registry: &VarRegistry<'_>,
 ) -> Result<ActiveOperandExpression, ActiveParserError> {
     println!("WARNING: IGNORED OPERAND EXPRESSION");
     Ok(ActiveOperandExpression::Literal(ActiveLiteral::Int(1)))
@@ -355,7 +379,7 @@ fn activate_loop_parse(
         block,
     } = term
     {
-        todo!("loop term")
+        todo!("loop term");
     } else {
         Err(ActiveParserError(
             "Expected loop term".to_string(),
@@ -369,13 +393,24 @@ fn activate_readln_parse(
     var_registry: &mut VarRegistry<'_>,
 ) -> Result<ActiveParse, ActiveParserError> {
     if let Term::ReadLn { var } = term {
-        todo!("readln term")
+        var_registry.confirm_var(&var, var_registry.get_base_type_id("str")?, true)?;
+        return Ok(ActiveParse::ReadLn {
+            object: activate_object(&var, &var_registry)?,
+        });
     } else {
         Err(ActiveParserError(
             "Expected readln term".to_string(),
             FileLocation::None,
         ))
     }
+}
+
+fn activate_object(
+    object: &Object,
+    var_registry: &VarRegistry<'_>,
+) -> Result<ActiveObject, ActiveParserError> {
+    println!("WARNING: IGNORED ACTIVATE OBJECT");
+    return Ok(ActiveObject::Temp);
 }
 
 fn activate_break_parse(
@@ -412,7 +447,7 @@ fn activate_call_parse(
 ) -> Result<ActiveParse, ActiveParserError> {
     if let Term::Call { value } = term {
         Ok(ActiveParse::Call {
-            operand_expression: activate_operand_block(value)?,
+            operand_expression: activate_operand_block(value, &var_registry)?,
         })
     } else {
         Err(ActiveParserError(

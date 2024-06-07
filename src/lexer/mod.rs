@@ -1,4 +1,3 @@
-pub mod simplify;
 pub mod syntax;
 pub mod tokens;
 
@@ -133,32 +132,14 @@ fn handel_char(
                     positioning.build(),
                 ));
                 result.push(Token(
-                    TokenType::Operator(Operator::Dot),
-                    positioning.build(),
-                ));
-                result.push(Token(
-                    TokenType::Identity("@str".to_string()),
-                    positioning.build(),
-                ));
-                result.push(Token(
-                    TokenType::Operator(Operator::Dot),
-                    positioning.build(),
-                ));
-                result.push(Token(
-                    TokenType::Operator(Operator::OpenParen),
-                    positioning.build(),
-                ));
-                result.push(Token(
-                    TokenType::Operator(Operator::CloseParen),
-                    positioning.build(),
-                ));
-                result.push(Token(
                     TokenType::Operator(Operator::Add),
                     positioning.build(),
                 ));
+
                 section.state =
                     SectionState::String(seek_string_reenter.1, StringInterpolator::Interpolated);
                 seek_string_reenter.0 = false;
+
                 return Ok(());
             }
 
@@ -367,6 +348,18 @@ fn handel_char(
                     // Add string join operator
                     result.push(Token(
                         TokenType::Operator(Operator::Add),
+                        positioning.build(),
+                    ));
+
+                    // Add string func
+                    result.push(Token(
+                        TokenType::Identity("@String".to_string()),
+                        positioning.build(),
+                    ));
+
+                    // Add dot
+                    result.push(Token(
+                        TokenType::Operator(Operator::Dot),
                         positioning.build(),
                     ));
 

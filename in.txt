@@ -4,10 +4,10 @@ struct MyCustomStruct {}
 # Declare a Function
 func null do_a_thing: {
     # Get user name
-    print "What is your name? "
+    print "What is your name? ";
     let str name = "";
     readln name;
-    println f"Hello, {name}"
+    println f"Hello, {name}";
 
     # Create loop
     loop i: i < 100 {
@@ -21,7 +21,7 @@ func null do_a_thing: {
     }
 
     updt name = "My New Value";
-    println name
+    println name;
 }
 
 # main function
