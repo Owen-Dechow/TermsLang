@@ -1,6 +1,6 @@
 use crate::errors::{ActiveParserError, FileLocation};
-use crate::parser::{Term, Type, VarSigniture};
-
+use crate::parser::parse_operand_block::OperandExpression;
+use crate::parser::{Object, ObjectType, Term, Type};
 use std::collections::HashMap;
 
 pub enum ActiveParse {
@@ -14,9 +14,11 @@ pub enum ActiveParse {
     Struct {
         name: String,
         properties: Vec<Property>,
-        methods: Vec<Method>,
     },
-    VarDeclation,
+    VarDeclation {
+        name: String,
+        value: ActiveOperandExpression,
+    },
     VarUpdate,
     Return,
     UpdateVar,
@@ -28,67 +30,173 @@ pub enum ActiveParse {
     Call,
 }
 
+enum ActiveOperandExpression {
+    Unary {
+        operand: UnaryOperand,
+        val: Box<OperandExpression>,
+    },
+    Binary {
+        operand: BinaryOperand,
+        left: Box<ActiveOperandExpression>,
+        right: Box<ActiveOperandExpression>,
+    },
+    Literal(ActiveLiteral),
+    Object(ActiveObject),
+    Create(ActivateObjectCreate),
+}
+
+enum BinaryOperand {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+    Modulo,
+    Exponent,
+
+    Equal,
+    Greater,
+    Less,
+    GreaterOrEqual,
+    LessOrEqual,
+    NotEqual,
+    And,
+    Or,
+}
+
+enum UnaryOperand {
+    Not,
+}
+
+enum ActiveLiteral {
+    Int(i32),
+    Float(f32),
+    String(String),
+    Bool(bool),
+}
+
+enum ActivateObjectCreate {}
+
+enum ActiveObject {}
+
+#[derive(Debug)]
 struct VarRegistry<'a> {
     tree_connection: VarRegistryTreeConnection<'a>,
-    object: HashMap<u32, ObjectOption<'a>>,
+    objects: HashMap<u32, ObjectOption>,
 }
 
 impl<'a> VarRegistry<'a> {
-    fn new() -> Self {
-        Self {
-            tree_connection: VarRegistryTreeConnection::Base { uid_counter: 0 },
-            object: HashMap::new(),
+    fn new(base_types: Vec<&str>) -> Self {
+        let mut new = Self {
+            tree_connection: VarRegistryTreeConnection::Base,
+            objects: HashMap::new(),
+        };
+
+        for base_type in base_types {
+            new.add_struct(base_type.to_string(), Vec::new());
         }
+
+        return new;
     }
 
     fn create_child(&mut self) -> VarRegistry<'_> {
         VarRegistry {
             tree_connection: VarRegistryTreeConnection::Child { parent: self },
-            object: HashMap::new(),
+            objects: HashMap::new(),
         }
     }
 
-    fn add_var(&mut self, name: String, _type: &Type) {
-        todo!()
+    fn add_var(&mut self, name: String, _type: &Type) -> Result<u32, ActiveParserError> {
+        let key = self.uid();
+        let val = ObjectOption::Var {
+            _type: convert_type_to_registry_type(_type, &self)?,
+            name,
+        };
+        self.objects.insert(key, val);
+
+        return Ok(key);
     }
 
-    fn collect_args(&self, args: &Vec<VarSigniture>) -> Vec<VarRegistryVarType> {
-        todo!()
-    }
-
-    fn add_function_to_parent(
+    fn add_function(
         &mut self,
         name: String,
         args: Vec<VarRegistryVarType>,
         returntype: u32,
-    ) {
-        todo!()
+    ) -> Result<(), ActiveParserError> {
+        let key = self.uid();
+        let val = ObjectOption::Func {
+            args,
+            returntype,
+            name,
+        };
+        self.objects.insert(key, val);
+
+        return Ok(());
     }
 
-    fn add_struct_to_parent(
-        &mut self,
-        name: String,
-        properties: Vec<Property>,
-        methods: Vec<Method>,
-    ) {
-        todo!()
+    fn add_struct(&mut self, name: String, properties: Vec<Property>) {
+        let uid = self.uid();
+        self.objects
+            .insert(uid, ObjectOption::Struct { name, properties });
     }
 
     fn get_id_of_type(&self, _type: &Type) -> Result<u32, ActiveParserError> {
-        todo!("get id")
+        match _type {
+            Type::Array(_type) => Err(ActiveParserError(
+                "Must be type root, arrays not allowed.".to_string(),
+                FileLocation::None,
+            )),
+            Type::Object { object } => self.get_id_of_object(object),
+        }
+    }
+
+    fn get_id_of_object(&self, object: &Object) -> Result<u32, ActiveParserError> {
+        match &object.kind {
+            ObjectType::Identity(string) => self.get_id_of_string(string),
+            _ => Err(ActiveParserError(
+                "Expected object to be identity".to_string(),
+                FileLocation::None,
+            )),
+        }
+    }
+
+    fn get_id_of_string(&self, string: &String) -> Result<u32, ActiveParserError> {
+        for (id, object) in &self.objects {
+            let name = match object {
+                ObjectOption::Var { name, .. } => name,
+                ObjectOption::Struct { name, .. } => name,
+                ObjectOption::Func { name, .. } => name,
+            };
+
+            if name == string {
+                return Ok(*id);
+            }
+        }
+
+        match self.tree_connection {
+            VarRegistryTreeConnection::Child { parent } => parent.get_id_of_string(string),
+            VarRegistryTreeConnection::Base => {
+                return Err(ActiveParserError(
+                    format!("No object with name '{}' found", string),
+                    FileLocation::None,
+                ));
+            }
+        }
+    }
+
+    fn uid(&self) -> u32 {
+        return rand::random();
     }
 }
 
-enum ObjectOption<'a> {
+#[derive(Debug)]
+enum ObjectOption {
     Var {
-        var_type: VarRegistryVarType,
-        name: String,
-    },
-    TypeVar {
+        _type: VarRegistryVarType,
         name: String,
     },
     Struct {
-        parent: Option<&'a ObjectOption<'a>>,
+        properties: Vec<Property>,
+        name: String,
     },
     Func {
         args: Vec<VarRegistryVarType>,
@@ -97,21 +205,33 @@ enum ObjectOption<'a> {
     },
 }
 
+#[derive(Debug)]
 enum VarRegistryTreeConnection<'a> {
     Child { parent: &'a VarRegistry<'a> },
-    Base { uid_counter: u32 },
+    Base,
 }
 
-struct Method {
-    is_static: bool,
-    func: ActiveParse,
-}
-
+#[derive(Debug, Clone)]
 struct Property {}
 
+#[derive(Debug, Clone)]
 enum VarRegistryVarType {
-    List(Box<VarRegistryVarType>),
+    Array(Box<VarRegistryVarType>),
     Base(u32),
+}
+
+fn convert_type_to_registry_type(
+    _type: &Type,
+    var_registry: &VarRegistry<'_>,
+) -> Result<VarRegistryVarType, ActiveParserError> {
+    match _type {
+        Type::Array(_type) => Ok(VarRegistryVarType::Array(Box::new(
+            convert_type_to_registry_type(_type, &var_registry)?,
+        ))),
+        Type::Object { .. } => Ok(VarRegistryVarType::Base(
+            var_registry.get_id_of_type(_type)?,
+        )),
+    }
 }
 
 fn activate_print_parse(
@@ -138,13 +258,23 @@ fn activate_var_declaration_parse(
         value,
     } = term
     {
-        todo!("declare var term")
+        var_registry.add_var(name.clone(), &vartype)?;
+        Ok(ActiveParse::VarDeclation {
+            name,
+            value: activate_operand_block(value)?,
+        })
     } else {
         Err(ActiveParserError(
             "Expected variable declaration term".to_string(),
             FileLocation::None,
         ))
     }
+}
+
+fn activate_operand_block(
+    block: OperandExpression,
+) -> Result<ActiveOperandExpression, ActiveParserError> {
+    todo!("Activate Operand Block")
 }
 
 fn activate_return_parse(
@@ -285,17 +415,25 @@ fn activeate_func_parse(
         block,
     } = func_term
     {
+        let func_return = var_registry.get_id_of_type(&returntype);
+
+        let identity_args = {
+            let mut identity_args = Vec::new();
+
+            for arg in &args {
+                identity_args.push(convert_type_to_registry_type(&arg.argtype, var_registry)?)
+            }
+
+            identity_args
+        };
+
+        var_registry.add_function(name.to_owned(), identity_args, func_return?)?;
+
         let mut var_registry = var_registry.create_child();
 
         for arg in &args {
-            var_registry.add_var(arg.identity.to_owned(), &arg.argtype);
+            var_registry.add_var(arg.identity.to_owned(), &arg.argtype)?;
         }
-
-        let func_return = var_registry.get_id_of_type(&returntype)?;
-
-        let args = var_registry.collect_args(&args);
-
-        var_registry.add_function_to_parent(name.to_owned(), args, func_return);
 
         let mut active_terms = Vec::<ActiveParse>::new();
         if let Term::Block { terms } = *block {
@@ -352,25 +490,7 @@ fn activate_struct_parse(
     struct_term: Term,
     var_registry: &mut VarRegistry<'_>,
 ) -> Result<ActiveParse, ActiveParserError> {
-    if let Term::Struct {
-        name,
-        properties,
-        methods,
-    } = struct_term
-    {
-        let mut var_registry = var_registry.create_child();
-        let active_methods = {
-            let mut active_methods = Vec::<Method>::new();
-            for method in methods {
-                let active_func = activeate_func_parse(method.func, &mut var_registry)?;
-                active_methods.push(Method {
-                    is_static: method.is_static,
-                    func: active_func,
-                })
-            }
-
-            active_methods
-        };
+    if let Term::Struct { name, properties } = struct_term {
         let active_properties = {
             let mut active_properties = Vec::<Property>::new();
             for prop in properties {
@@ -380,9 +500,12 @@ fn activate_struct_parse(
             active_properties
         };
 
-        var_registry.add_struct_to_parent(name, active_properties, active_methods);
+        var_registry.add_struct(name.clone(), active_properties.clone());
 
-        todo!()
+        return Ok(ActiveParse::Struct {
+            name,
+            properties: active_properties,
+        });
     } else {
         Err(ActiveParserError(
             "Expected struct term".to_string(),
@@ -392,7 +515,9 @@ fn activate_struct_parse(
 }
 
 fn activate_file_block(file_block: Term) -> Result<ActiveParse, ActiveParserError> {
-    let mut var_registry = VarRegistry::new();
+    let mut var_registry = VarRegistry::new(vec!["null", "str"]);
+    let mut var_registry = var_registry.create_child();
+
     let mut active_terms = Vec::<ActiveParse>::new();
 
     if let Term::Block { terms } = file_block {

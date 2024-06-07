@@ -63,10 +63,7 @@ pub enum Array {
 #[derive(Debug, Clone)]
 pub enum Type {
     Array(Box<Type>),
-    Object {
-        object: Object,
-        associated_types: Vec<Type>,
-    },
+    Object { object: Object },
 }
 
 #[derive(Debug, Clone)]
@@ -100,12 +97,6 @@ pub struct Index(Vec<OperandExpression>);
 pub struct VarSigniture {
     pub identity: String,
     pub argtype: Type,
-}
-
-#[derive(Debug, Clone)]
-pub struct Method {
-    pub func: Term,
-    pub is_static: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -157,7 +148,6 @@ pub enum Term {
     Struct {
         name: String,
         properties: Vec<VarSigniture>,
-        methods: Vec<Method>,
     },
 }
 
@@ -587,7 +577,6 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             }
         };
 
-        let mut methods = Vec::<Method>::new();
         let mut properties = Vec::<VarSigniture>::new();
         loop {
             if let Some(Token(TokenType::Operator(Operator::CloseBlock), _)) =
@@ -600,39 +589,6 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
 
             match token_stream.advance() {
                 Some(token) => match token {
-                    Token(TokenType::KeyWord(KeyWord::Static), _) => {
-                        // Ensure func keyword
-                        let func_token = match token_stream.advance() {
-                            Some(token) => match token {
-                                Token(TokenType::KeyWord(KeyWord::Func), _) => token,
-                                _ => {
-                                    return Err(ParserError(
-                                        "Unexpected token in static func definition".to_string(),
-                                        FileLocation::End,
-                                    ))
-                                }
-                            },
-                            _ => {
-                                return Err(ParserError(
-                                    "Expected func definition".to_string(),
-                                    FileLocation::End,
-                                ))
-                            }
-                        };
-
-                        let function = parse_term(func_token.clone(), token_stream)?;
-                        methods.push(Method {
-                            func: function,
-                            is_static: true,
-                        })
-                    }
-                    Token(TokenType::KeyWord(KeyWord::Func), _) => {
-                        let function = parse_term(token.clone(), token_stream)?;
-                        methods.push(Method {
-                            func: function,
-                            is_static: false,
-                        })
-                    }
                     Token(TokenType::KeyWord(KeyWord::Var), _) => {
                         let var_sig = parse_var_sig(token_stream)?;
 
@@ -671,11 +627,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             }
         }
 
-        return Ok(Term::Struct {
-            name,
-            properties,
-            methods,
-        });
+        return Ok(Term::Struct { name, properties });
     }
 
     return Err(ParserError(

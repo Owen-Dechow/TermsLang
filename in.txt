@@ -1,43 +1,5 @@
 # FizzBuzz class
-struct FizzBuzz {
-
-    # FizzBuzz initializer
-    func null @new: {
-        println "FizzBuzz Object Created";
-    }
-
-    # Run function
-    func null run: int n {
-        # Loop n times
-        loop i: i < n {
-
-            # Declare result var
-            let str result = "";
-
-            if i % 3 == 0 {
-                # Update result var
-                updt result += "Fizz";
-            }
-
-            if i % 5 == 0 {
-                # Update result var
-                updt result += "Buzz";
-            }
-
-            # Check if no Fizz or Buzz
-            if result == "" {
-                # Print number (i)
-                println i;
-                
-                # Exit function early
-                return null;
-            }
-
-            # Print result
-            println result;
-        }
-    }
-}
+struct FizzBuzz {}
 
 # main function
 func null main: str[] args {

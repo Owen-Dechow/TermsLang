@@ -1,4 +1,4 @@
-mod avtive_parser;
+mod active_parser;
 pub mod errors;
 pub mod interpretor;
 pub mod lexer;
@@ -32,7 +32,7 @@ fn main() {
     };
 
     // Active parse
-    let active_parse_out = match avtive_parser::activate_parse(parse_out) {
+    let active_parse_out = match active_parser::activate_parse(parse_out) {
         Ok(active_parse) => active_parse,
         Err(err) => {
             panic!("{}", err.prettify(&program));

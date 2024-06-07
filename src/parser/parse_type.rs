@@ -52,31 +52,7 @@ pub fn parse_type(token_stream: &mut TokenStream) -> Result<Type, ParserError> {
     // Get the typename token
     let typename = parse_object_peekable(token_stream)?;
 
-    // collect the next token if none exists return type
-    let next = match token_stream.advance() {
-        Some(next) => next,
-        None => {
-            return Ok(Type::Object {
-                object: typename,
-                associated_types: Vec::<Type>::new(),
-            });
-        }
-    };
-
-    // check for associated types: <>
-    let associated_types = {
-        if let Token(TokenType::Operator(Operator::Less), _) = next {
-            get_associated_types(token_stream)?
-        } else {
-            token_stream.back();
-            Vec::<Type>::new()
-        }
-    };
-
-    let mut _type = Type::Object {
-        object: typename,
-        associated_types,
-    };
+    let mut _type = Type::Object { object: typename };
 
     // Wrap matrix
     while let Some(Token(TokenType::Operator(Operator::OpenBracket), _)) = token_stream.advance() {
