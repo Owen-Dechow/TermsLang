@@ -19,15 +19,30 @@ pub enum ActiveParse {
         name: String,
         value: ActiveOperandExpression,
     },
-    VarUpdate,
-    Return,
-    UpdateVar,
-    If,
-    Loop,
-    ReadLn,
+    VarUpdate {
+        name: String,
+        value: ActiveOperandExpression,
+    },
+    Return {
+        value: ActiveOperandExpression,
+    },
+    If {
+        conditional: ActiveOperandExpression,
+        active_terms: Vec<ActiveParse>,
+    },
+    Loop {
+        counter: String,
+        conditional: String,
+        active_terms: Vec<ActiveParse>,
+    },
+    ReadLn {
+        object: ActiveObject,
+    },
     Break,
     Continue,
-    Call,
+    Call {
+        operand_expression: ActiveOperandExpression,
+    },
 }
 
 enum ActiveOperandExpression {
@@ -274,7 +289,8 @@ fn activate_var_declaration_parse(
 fn activate_operand_block(
     block: OperandExpression,
 ) -> Result<ActiveOperandExpression, ActiveParserError> {
-    todo!("Activate Operand Block")
+    println!("WARNING: IGNORED OPERAND EXPRESSION");
+    Ok(ActiveOperandExpression::Literal(ActiveLiteral::Int(1)))
 }
 
 fn activate_return_parse(
@@ -395,7 +411,9 @@ fn activate_call_parse(
     var_registry: &mut VarRegistry<'_>,
 ) -> Result<ActiveParse, ActiveParserError> {
     if let Term::Call { value } = term {
-        todo!("call term")
+        Ok(ActiveParse::Call {
+            operand_expression: activate_operand_block(value)?,
+        })
     } else {
         Err(ActiveParserError(
             "Expected call term".to_string(),

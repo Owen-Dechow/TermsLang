@@ -1,6 +1,24 @@
 # FizzBuzz class
 struct FizzBuzz {}
 
+func null do_a_thing: {
+    let str response = "";
+    readln response;
+
+    loop i: i < 100 {
+        print "Hello";
+        println "Print Ln";
+        
+        if i < 10 {
+            continue;
+        }
+
+        break;
+    }
+
+    updt response = "yup";
+}
+
 # main function
 func null main: str[] args {
 
@@ -8,5 +26,5 @@ func null main: str[] args {
     let FizzBuzz fizzy = $() FizzBuzz;
 
     # Call run function
-    cll fizzy.run.(100);
+    cll do_a_thing.(100);
 }
