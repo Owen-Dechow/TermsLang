@@ -11,6 +11,7 @@ pub const LINE_TERMINATOR: char = ';';
 pub const STRING_QUOTES: &str = "\"'`";
 pub const FORMAT_STRING_GATES: (char, char) = ('{', '}');
 pub const IGNORED_IN_NUMBERS: &str = "_";
+pub const PROGRAM_ENTRY: &str = "main";
 
 pub struct SyntaxMap<'a> {
     pub operators: HashMap<&'a str, Operator>,

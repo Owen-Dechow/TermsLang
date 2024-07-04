@@ -1,5 +1,9 @@
+"my program"
+
 # Custom Struct
-struct MyCustomStruct {}
+struct MyCustomStruct {
+    let int val;
+}
 
 # Declare a Function
 func null do_a_thing: {
@@ -25,7 +29,7 @@ func null do_a_thing: {
 }
 
 # main function
-func null main: str[] args {
+func null main: str args {
 
     # Create MyCustomStruct Instance
     let MyCustomStruct my_instance = $() MyCustomStruct;

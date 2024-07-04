@@ -1,6 +1,9 @@
 use crate::{
     errors::{FileLocation, ParserError},
-    lexer::tokens::{KeyWord, Operator, Token, TokenType},
+    lexer::{
+        syntax::PROGRAM_ENTRY,
+        tokens::{KeyWord, Operator, Token, TokenType},
+    },
 };
 
 use self::{
@@ -35,21 +38,6 @@ impl TokenStream {
 
     fn back(&mut self) {
         self.ptr -= 1;
-    }
-
-    fn add_lead(&mut self) {
-        self.tokens.insert(
-            0,
-            Token(
-                TokenType::Terminate,
-                FileLocation::Loc {
-                    start_line: 0,
-                    end_line: 0,
-                    start_col: 0,
-                    end_col: 0,
-                },
-            ),
-        );
     }
 }
 
@@ -100,16 +88,32 @@ pub struct VarSigniture {
 }
 
 #[derive(Debug, Clone)]
+pub struct Program {
+    pub structs: Vec<Struct>,
+    pub functions: Vec<Function>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Function {
+    pub name: String,
+    pub returntype: Type,
+    pub args: Vec<VarSigniture>,
+    pub block: TermBlock,
+}
+
+#[derive(Debug, Clone)]
+pub struct Struct {
+    pub name: String,
+    pub properties: Vec<VarSigniture>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TermBlock {
+    terms: Vec<Term>,
+}
+
+#[derive(Debug, Clone)]
 pub enum Term {
-    Block {
-        terms: Vec<Term>,
-    },
-    Func {
-        name: String,
-        returntype: Type,
-        args: Vec<VarSigniture>,
-        block: Box<Term>,
-    },
     Print {
         ln: bool,
         operand_block: OperandExpression,
@@ -129,13 +133,13 @@ pub enum Term {
     },
     If {
         conditional: OperandExpression,
-        block: Box<Term>,
-        else_block: Box<Term>,
+        block: TermBlock,
+        else_block: TermBlock,
     },
     Loop {
         counter: String,
         conditional: OperandExpression,
-        block: Box<Term>,
+        block: TermBlock,
     },
     ReadLn {
         var: Object,
@@ -145,124 +149,10 @@ pub enum Term {
     Call {
         value: OperandExpression,
     },
-    Struct {
-        name: String,
-        properties: Vec<VarSigniture>,
-    },
 }
 
 // Parse single term
 fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term, ParserError> {
-    // Parse function
-    if let Token(TokenType::KeyWord(KeyWord::Func), _) = lead_token {
-        // Get return type of function
-        let returntype = parse_type::parse_type(token_stream)?;
-
-        // Get identity of function
-        let name = match token_stream.advance().cloned() {
-            Some(op) => match op.0 {
-                TokenType::Identity(id) => id,
-                _ => {
-                    return Err(ParserError(
-                        "Unexpected token instead of function name".to_string(),
-                        op.1,
-                    ))
-                }
-            },
-            None => {
-                return Err(ParserError(
-                    "Expected function name".to_string(),
-                    FileLocation::End,
-                ))
-            }
-        };
-
-        // Burn identity arg separator in function signiture
-        match token_stream.advance() {
-            Some(Token(TokenType::Operator(Operator::Colon), _)) => {}
-            Some(token) => {
-                return Err(ParserError(
-                    "Unexpected token in function signiture".to_string(),
-                    token.1.clone(),
-                ))
-            }
-            None => {
-                return Err(ParserError(
-                    "Premature end to function signiture".to_string(),
-                    FileLocation::End,
-                ))
-            }
-        };
-
-        // Get normal args of function
-        let args = {
-            // Create arg list
-            let mut args = Vec::<VarSigniture>::new();
-
-            // Loop until end of arg list found
-            loop {
-                //  Ensure token exits else return syntax error
-                let token = match token_stream.advance() {
-                    Some(token) => token,
-                    None => {
-                        return Err(ParserError(
-                            "Expected function body".to_string(),
-                            FileLocation::End,
-                        ))
-                    }
-                };
-
-                // If state of function block found exit loop
-                if let Token(TokenType::Operator(Operator::OpenBlock), _) = token {
-                    break;
-                }
-
-                // Roll token stream back to start of arg declaration
-                token_stream.back();
-
-                let var_sig = parse_type::parse_var_sig(token_stream)?;
-
-                // Parse argument and add to arg list
-                args.push(var_sig.clone());
-
-                // Check if arg list continues or start of block found else return syntax error
-                match token_stream.advance() {
-                    Some(Token(TokenType::Operator(Operator::OpenBlock), _)) => break,
-                    Some(Token(TokenType::Operator(Operator::Comma), _)) => continue,
-                    Some(token) => {
-                        return Err(ParserError(
-                            "Unexpected token in function signiture".to_string(),
-                            token.1.clone(),
-                        ))
-                    }
-                    None => {
-                        return Err(ParserError(
-                            "Expected function body".to_string(),
-                            FileLocation::End,
-                        ))
-                    }
-                }
-            }
-
-            // return arg list
-            args
-        };
-
-        // Roll back to beginning of function block
-        token_stream.back();
-
-        // Get function block
-        let block = Box::new(parse_block(token_stream, false)?);
-
-        // Add function to term array
-        return Ok(Term::Func {
-            name: name.to_owned(),
-            returntype,
-            args,
-            block,
-        });
-    }
-
     // Parse print
     if let Token(TokenType::KeyWord(KeyWord::Print), _) = lead_token {
         return Ok(Term::Print {
@@ -376,17 +266,17 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
         let conditional =
             parse_operand_block(token_stream, vec![TokenType::Operator(Operator::OpenBlock)])?;
         token_stream.back();
-        let block = parse_block(token_stream, false)?;
+        let block = parse_block(token_stream)?;
 
         let else_block = match token_stream.advance() {
             Some(Token(TokenType::KeyWord(KeyWord::Else), _)) => match token_stream.advance() {
                 Some(token) => match token {
-                    Token(TokenType::KeyWord(KeyWord::If), _) => {
-                        parse_term(token.clone(), token_stream)?
-                    }
+                    Token(TokenType::KeyWord(KeyWord::If), _) => TermBlock {
+                        terms: vec![parse_term(token.clone(), token_stream)?],
+                    },
                     Token(TokenType::Operator(Operator::OpenBlock), _) => {
                         token_stream.back();
-                        parse_block(token_stream, false)?
+                        parse_block(token_stream)?
                     }
                     _ => {
                         return Err(ParserError(
@@ -404,7 +294,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             },
             _ => {
                 token_stream.back();
-                Term::Block {
+                TermBlock {
                     terms: Vec::<Term>::new(),
                 }
             }
@@ -412,8 +302,8 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
 
         return Ok(Term::If {
             conditional,
-            block: Box::new(block),
-            else_block: Box::new(else_block),
+            block,
+            else_block,
         });
     }
 
@@ -459,12 +349,12 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             parse_operand_block(token_stream, vec![TokenType::Operator(Operator::OpenBlock)])?;
         token_stream.back();
 
-        let block = parse_block(token_stream, false)?;
+        let block = parse_block(token_stream)?;
 
         return Ok(Term::Loop {
             counter,
             conditional,
-            block: Box::new(block),
+            block,
         });
     }
 
@@ -540,170 +430,324 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
         };
     }
 
-    // Parse class
-    if let Token(TokenType::KeyWord(KeyWord::Struct), _) = lead_token {
-        let name = match token_stream.advance().cloned() {
-            Some(op) => match op.0 {
-                TokenType::Identity(id) => id,
-                _ => {
-                    return Err(ParserError(
-                        "Unexpected token in place of class name".to_string(),
-                        (op.1).clone(),
-                    ))
-                }
-            },
-            None => {
-                return Err(ParserError(
-                    "Expected class name".to_string(),
-                    FileLocation::End,
-                ))
-            }
-        };
-
-        // Get class block open
-        match token_stream.advance() {
-            Some(Token(TokenType::Operator(Operator::OpenBlock), _)) => {}
-            Some(token) => {
-                return Err(ParserError(
-                    "Unexpected token in class definition".to_string(),
-                    token.1.clone(),
-                ))
-            }
-            None => {
-                return Err(ParserError(
-                    "Premature end to class definition".to_string(),
-                    FileLocation::End,
-                ))
-            }
-        };
-
-        let mut properties = Vec::<VarSigniture>::new();
-        loop {
-            if let Some(Token(TokenType::Operator(Operator::CloseBlock), _)) =
-                token_stream.advance()
-            {
-                break;
-            }
-
-            token_stream.back();
-
-            match token_stream.advance() {
-                Some(token) => match token {
-                    Token(TokenType::KeyWord(KeyWord::Var), _) => {
-                        let var_sig = parse_var_sig(token_stream)?;
-
-                        // Check for terminating char
-                        match token_stream.advance() {
-                            Some(Token(TokenType::Terminate, _)) => {}
-                            Some(token) => {
-                                return Err(ParserError(
-                                    "Unexpected token in property definition".to_string(),
-                                    token.1.clone(),
-                                ))
-                            }
-                            None => {
-                                return Err(ParserError(
-                                    "Expected line terminator".to_string(),
-                                    FileLocation::End,
-                                ))
-                            }
-                        };
-
-                        properties.push(var_sig);
-                    }
-                    _ => {
-                        return Err(ParserError(
-                            "Unexpected token within class block".to_string(),
-                            token.1.clone(),
-                        ))
-                    }
-                },
-                None => {
-                    return Err(ParserError(
-                        "Expected class block close".to_string(),
-                        FileLocation::End,
-                    ))
-                }
-            }
-        }
-
-        return Ok(Term::Struct { name, properties });
-    }
-
     return Err(ParserError(
         "Unrecognized term".to_string(),
         lead_token.1.clone(),
     ));
 }
 
-// Parse code within block
-fn parse_block(
-    token_stream: &mut TokenStream,
-    omit_block_tokens: bool,
-) -> Result<Term, ParserError> {
-    // Check for block open
-    let mut block = {
-        if omit_block_tokens {
-            Term::Block {
-                terms: Vec::<Term>::new(),
-            }
-        } else {
-            match token_stream.advance() {
-                Some(Token(TokenType::Operator(Operator::OpenBlock), _)) => Term::Block {
-                    terms: Vec::<Term>::new(),
-                },
-                Some(token) => {
-                    return Err(ParserError("Expected block".to_string(), token.1.clone()))
-                }
-                None => return Err(ParserError("Expected block".to_string(), FileLocation::End)),
-            }
-        }
-    };
+// Parse function
+fn parse_func(token_stream: &mut TokenStream) -> Result<Function, ParserError> {
+    // Get return type of function
+    let returntype = parse_type::parse_type(token_stream)?;
 
-    // Extract block variables as ref mut
-    if let Term::Block { ref mut terms } = block {
-        // Parse terms until end of block found
-        while let Some(t) = token_stream.advance().cloned() {
-            // Break loop if end of block found
-            if !omit_block_tokens {
-                if let Token(TokenType::Operator(Operator::CloseBlock), _) = t {
-                    break;
-                }
-            }
-
-            // Parse term
-            let term = parse_term(t, token_stream)?;
-            terms.push(term);
-        }
-    };
-
-    if omit_block_tokens {
-        return Ok(block);
-    } else {
-        match token_stream.current() {
-            Some(Token(TokenType::Operator(Operator::CloseBlock), _pos)) => return Ok(block),
-            Some(Token(_, pos)) => {
+    // Get identity of function
+    let name = match token_stream.advance().cloned() {
+        Some(op) => match op.0 {
+            TokenType::Identity(id) => id,
+            _ => {
                 return Err(ParserError(
-                    "Unexpected token at block closing".to_string(),
-                    pos.clone(),
+                    "Unexpected token instead of function name".to_string(),
+                    op.1,
                 ))
             }
+        },
+        None => {
+            return Err(ParserError(
+                "Expected function name".to_string(),
+                FileLocation::End,
+            ))
+        }
+    };
+
+    // Burn identity arg separator in function signiture
+    match token_stream.advance() {
+        Some(Token(TokenType::Operator(Operator::Colon), _)) => {}
+        Some(token) => {
+            return Err(ParserError(
+                "Unexpected token in function signiture".to_string(),
+                token.1.clone(),
+            ))
+        }
+        None => {
+            return Err(ParserError(
+                "Premature end to function signiture".to_string(),
+                FileLocation::End,
+            ))
+        }
+    };
+
+    // Get normal args of function
+    let args = {
+        // Create arg list
+        let mut args = Vec::<VarSigniture>::new();
+
+        // Loop until end of arg list found
+        loop {
+            //  Ensure token exits else return syntax error
+            let token = match token_stream.advance() {
+                Some(token) => token,
+                None => {
+                    return Err(ParserError(
+                        "Expected function body".to_string(),
+                        FileLocation::End,
+                    ))
+                }
+            };
+
+            // If state of function block found exit loop
+            if let Token(TokenType::Operator(Operator::OpenBlock), _) = token {
+                break;
+            }
+
+            // Roll token stream back to start of arg declaration
+            token_stream.back();
+
+            let var_sig = parse_type::parse_var_sig(token_stream)?;
+
+            // Parse argument and add to arg list
+            args.push(var_sig.clone());
+
+            // Check if arg list continues or start of block found else return syntax error
+            match token_stream.advance() {
+                Some(Token(TokenType::Operator(Operator::OpenBlock), _)) => break,
+                Some(Token(TokenType::Operator(Operator::Comma), _)) => continue,
+                Some(token) => {
+                    return Err(ParserError(
+                        "Unexpected token in function signiture".to_string(),
+                        token.1.clone(),
+                    ))
+                }
+                None => {
+                    return Err(ParserError(
+                        "Expected function body".to_string(),
+                        FileLocation::End,
+                    ))
+                }
+            }
+        }
+
+        // return arg list
+        args
+    };
+
+    // Roll back to beginning of function block
+    token_stream.back();
+
+    // Get function block
+    let block = parse_block(token_stream)?;
+
+    // Add function to term array
+    return Ok(Function {
+        name: name.to_owned(),
+        returntype,
+        args,
+        block,
+    });
+}
+
+// Parse struct
+fn parse_struct(token_stream: &mut TokenStream) -> Result<Struct, ParserError> {
+    let name = match token_stream.advance().cloned() {
+        Some(op) => match op.0 {
+            TokenType::Identity(id) => match id.as_str() {
+                PROGRAM_ENTRY => {
+                    return Err(ParserError(
+                        format!("Cannot name struct {}", PROGRAM_ENTRY),
+                        op.1,
+                    ))
+                }
+                _ => id,
+            },
+            _ => {
+                return Err(ParserError(
+                    "Unexpected token in place of class name".to_string(),
+                    (op.1).clone(),
+                ))
+            }
+        },
+        None => {
+            return Err(ParserError(
+                "Expected class name".to_string(),
+                FileLocation::End,
+            ))
+        }
+    };
+
+    // Get class block open
+    match token_stream.advance() {
+        Some(Token(TokenType::Operator(Operator::OpenBlock), _)) => {}
+        Some(token) => {
+            return Err(ParserError(
+                "Unexpected token in class definition".to_string(),
+                token.1.clone(),
+            ))
+        }
+        None => {
+            return Err(ParserError(
+                "Premature end to class definition".to_string(),
+                FileLocation::End,
+            ))
+        }
+    };
+
+    let mut properties = Vec::<VarSigniture>::new();
+    loop {
+        if let Some(Token(TokenType::Operator(Operator::CloseBlock), _)) = token_stream.advance() {
+            break;
+        }
+
+        token_stream.back();
+
+        match token_stream.advance() {
+            Some(token) => match token {
+                Token(TokenType::KeyWord(KeyWord::Var), _) => {
+                    let var_sig = parse_var_sig(token_stream)?;
+
+                    // Check for terminating char
+                    match token_stream.advance() {
+                        Some(Token(TokenType::Terminate, _)) => {}
+                        Some(token) => {
+                            return Err(ParserError(
+                                "Unexpected token in property definition".to_string(),
+                                token.1.clone(),
+                            ))
+                        }
+                        None => {
+                            return Err(ParserError(
+                                "Expected line terminator".to_string(),
+                                FileLocation::End,
+                            ))
+                        }
+                    };
+
+                    properties.push(var_sig);
+                }
+                _ => {
+                    return Err(ParserError(
+                        "Unexpected token within class block".to_string(),
+                        token.1.clone(),
+                    ))
+                }
+            },
             None => {
                 return Err(ParserError(
-                    "Expected block close".to_string(),
+                    "Expected class block close".to_string(),
                     FileLocation::End,
                 ))
             }
         }
     }
+
+    return Ok(Struct { name, properties });
+}
+
+// Parse code within block
+fn parse_block(token_stream: &mut TokenStream) -> Result<TermBlock, ParserError> {
+    // Check for block open
+    let mut block = match token_stream.advance() {
+        Some(Token(TokenType::Operator(Operator::OpenBlock), _)) => TermBlock {
+            terms: Vec::<Term>::new(),
+        },
+        Some(token) => return Err(ParserError("Expected block".to_string(), token.1.clone())),
+        None => return Err(ParserError("Expected block".to_string(), FileLocation::End)),
+    };
+
+    let TermBlock { ref mut terms } = block;
+
+    // Parse terms until end of block found
+    while let Some(token) = token_stream.advance().cloned() {
+        // Break loop if end of block found
+        if let Token(TokenType::Operator(Operator::CloseBlock), _) = token {
+            break;
+        }
+
+        // Parse term
+        let term = parse_term(token, token_stream)?;
+        terms.push(term);
+    }
+
+    match token_stream.current() {
+        Some(Token(TokenType::Operator(Operator::CloseBlock), _pos)) => return Ok(block),
+        Some(Token(_, pos)) => {
+            return Err(ParserError(
+                "Unexpected token at block closing".to_string(),
+                pos.clone(),
+            ))
+        }
+        None => {
+            return Err(ParserError(
+                "Expected block close".to_string(),
+                FileLocation::End,
+            ))
+        }
+    }
+}
+
+fn parse_program(token_stream: &mut TokenStream) -> Result<Program, ParserError> {
+    let mut program = Program {
+        structs: Vec::new(),
+        functions: Vec::new(),
+    };
+
+    while let Some(token) = token_stream.advance().cloned() {
+        match token.0 {
+            TokenType::KeyWord(keyword) => match keyword {
+                KeyWord::Struct => program.structs.push(parse_struct(token_stream)?),
+                KeyWord::Func => program.functions.push(parse_func(token_stream)?),
+                _ => {
+                    return Err(ParserError(
+                        format!("Invalid keyword, {}, in program namespace", keyword),
+                        token.1,
+                    ))
+                }
+            },
+            _ => {
+                return Err(ParserError(
+                    format!("Invalid token, {}, in program namespace", token.0),
+                    token.1,
+                ))
+            }
+        }
+    }
+
+    return Ok(program);
 }
 
 // Parse a Token Vector
-pub fn parse(input: Vec<Token>) -> Result<Term, ParserError> {
-    // Create token stream
+pub fn parse(input: Vec<Token>) -> Result<Program, ParserError> {
     let mut token_stream = TokenStream::new(input);
-    token_stream.add_lead();
-
-    // Parse and return the program block
-    return parse_block(&mut token_stream, true);
+    let _program_prelude = match token_stream.current() {
+        Some(Token(TokenType::String(string), _)) => string,
+        Some(token) => {
+            let mut loc = token.1.clone();
+            if let FileLocation::Loc {
+                start_line,
+                end_line,
+                start_col,
+                mut end_col,
+            } = loc
+            {
+                end_col = 1;
+                loc = FileLocation::Loc {
+                    start_line,
+                    end_line,
+                    start_col,
+                    end_col,
+                }
+            }
+            return Err(ParserError(
+                "No program prelude string found".to_string(),
+                loc,
+            ));
+        }
+        None => {
+            return Err(ParserError(
+                "Program file empty".to_string(),
+                FileLocation::None,
+            ))
+        }
+    };
+    println!("{}", _program_prelude);
+    return parse_program(&mut token_stream);
 }
