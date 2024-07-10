@@ -109,7 +109,7 @@ pub struct Struct {
 
 #[derive(Debug, Clone)]
 pub struct TermBlock {
-    terms: Vec<Term>,
+    pub terms: Vec<Term>,
 }
 
 #[derive(Debug, Clone)]
@@ -140,9 +140,6 @@ pub enum Term {
         counter: String,
         conditional: OperandExpression,
         block: TermBlock,
-    },
-    ReadLn {
-        var: Object,
     },
     Break,
     Continue,
@@ -405,29 +402,6 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
         return Ok(Term::Call {
             value: parse_operand_block(token_stream, vec![TokenType::Terminate])?,
         });
-    }
-
-    // Parse readln
-    if let Token(TokenType::KeyWord(KeyWord::ReadLn), _) = lead_token {
-        let var = parse_object_peekable(token_stream)?;
-
-        return match token_stream.advance() {
-            Some(token) => match token.0 {
-                TokenType::Terminate => Ok(Term::ReadLn { var }),
-                _ => {
-                    return Err(ParserError(
-                        "Unexpected token at after continue".to_string(),
-                        token.1.clone(),
-                    ))
-                }
-            },
-            None => {
-                return Err(ParserError(
-                    "Expected line terminator".to_string(),
-                    FileLocation::End,
-                ))
-            }
-        };
     }
 
     return Err(ParserError(

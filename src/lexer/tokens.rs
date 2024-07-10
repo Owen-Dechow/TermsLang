@@ -89,7 +89,6 @@ impl Display for Operator {
 pub enum KeyWord {
     Print,
     PrintLn,
-    ReadLn,
     Struct,
     If,
     Else,

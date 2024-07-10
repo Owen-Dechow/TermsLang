@@ -59,7 +59,6 @@ pub fn get_syntax_map() -> SyntaxMap<'static> {
         keywords: HashMap::<&str, KeyWord>::from([
             ("print", KeyWord::Print),
             ("println", KeyWord::PrintLn),
-            ("readln", KeyWord::ReadLn),
             ("struct", KeyWord::Struct),
             ("if", KeyWord::If),
             ("else", KeyWord::Else),

@@ -1,4 +1,4 @@
-"my program"
+`my program`
 
 # Custom Struct
 struct MyCustomStruct {
@@ -6,18 +6,17 @@ struct MyCustomStruct {
 }
 
 # Declare a Function
-func null do_a_thing: {
+func null do_a_thing: int this_many_times {
     # Get user name
-    print "What is your name? ";
-    let str name = "";
-    readln name;
+    println 'What is your name? ';
+    let str name = readln.();
     println f"Hello, {name}";
 
     # Create loop
-    loop i: i < 100 {
+    loop i: i < this_many_times {
         print "Number: {i}";
         
-        if i < 10 {
+        if i < 50 {
             continue;
         } else {
             break;
@@ -29,11 +28,11 @@ func null do_a_thing: {
 }
 
 # main function
-func null main: str args {
+func null main: str[] args {
 
     # Create MyCustomStruct Instance
-    let MyCustomStruct my_instance = $() MyCustomStruct;
+    let MyCustomStruct my_instance = $(100) MyCustomStruct;
 
     # Call a Function
-    cll do_a_thing.(100);
+    cll do_a_thing.(my_instance.val);
 }
