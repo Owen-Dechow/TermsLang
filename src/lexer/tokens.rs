@@ -38,7 +38,7 @@ impl Display for TokenType {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum Operator {
     Add,
     Subtract,
@@ -106,11 +106,4 @@ impl Display for KeyWord {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self:?}")
     }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum StringInterpolator {
-    None,
-    Interpolated,
-    Raw,
 }

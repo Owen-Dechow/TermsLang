@@ -7,10 +7,10 @@ use std::collections::HashMap;
 
 use self::{
     syntax::{
-        get_syntax_map, SyntaxMap, COMMENT, DECIMAL, FORMAT_STRING_GATES, IGNORED_IN_NUMBERS,
-        LINE_TERMINATOR, NEW_LINE, STRING_QUOTES, VARIABLE_ALLOWED_EXTRA_CHARS, WHITE_SPACE,
+        get_syntax_map, SyntaxMap, COMMENT, DECIMAL, IGNORED_IN_NUMBERS, LINE_TERMINATOR, NEW_LINE,
+        STRING_QUOTES, VARIABLE_ALLOWED_EXTRA_CHARS, WHITE_SPACE,
     },
-    tokens::{Operator, StringInterpolator, Token, TokenType},
+    tokens::{Operator, Token, TokenType},
 };
 
 #[derive(PartialEq, Debug)]
@@ -21,7 +21,7 @@ enum SectionState {
     Operator,
     Word,
     Comment,
-    String(char, StringInterpolator),
+    String(char),
 }
 
 struct Section {
@@ -77,7 +77,6 @@ fn handel_char(
     section: &mut Section,
     result: &mut Vec<Token>,
     syntax_map: &SyntaxMap,
-    seek_string_reenter: &mut (bool, char),
     positioning: &mut FileLocationModel,
 ) -> Result<(), LexerError> {
     // Handel character based on state
@@ -121,25 +120,7 @@ fn handel_char(
 
             // Check for string
             if STRING_QUOTES.contains(c) {
-                section.state = SectionState::String(c, StringInterpolator::None);
-                return Ok(());
-            }
-
-            // Check for end of {} in interpolated string
-            if seek_string_reenter.0 && c == FORMAT_STRING_GATES.1 {
-                result.push(Token(
-                    TokenType::Operator(Operator::CloseParen),
-                    positioning.build(),
-                ));
-                result.push(Token(
-                    TokenType::Operator(Operator::Add),
-                    positioning.build(),
-                ));
-
-                section.state =
-                    SectionState::String(seek_string_reenter.1, StringInterpolator::Interpolated);
-                seek_string_reenter.0 = false;
-
+                section.state = SectionState::String(c);
                 return Ok(());
             }
 
@@ -175,14 +156,7 @@ fn handel_char(
                 positioning.build(),
             ));
             section.reset();
-            return handel_char(
-                c,
-                section,
-                result,
-                syntax_map,
-                seek_string_reenter,
-                positioning,
-            );
+            return handel_char(c, section, result, syntax_map, positioning);
         }
 
         // If state = float
@@ -204,14 +178,7 @@ fn handel_char(
                 positioning.build(),
             ));
             section.reset();
-            return handel_char(
-                c,
-                section,
-                result,
-                syntax_map,
-                seek_string_reenter,
-                positioning,
-            );
+            return handel_char(c, section, result, syntax_map, positioning);
         }
 
         // If state = Word (Variable or Kewword)
@@ -225,15 +192,6 @@ fn handel_char(
             // Take ownership of word
             let string_content = section.content.to_owned();
             let content = string_content.as_str();
-
-            // Check to see if interpolated string identity: random_word"" => false, interpolate"" => true
-            if STRING_QUOTES.contains(c) && syntax_map.string_interpolators.contains_key(content) {
-                section.state =
-                    SectionState::String(c, syntax_map.string_interpolators[content].clone());
-                section.content.clear();
-
-                return Ok(());
-            }
 
             // Check if kewword
             if syntax_map.keywords.contains_key(content) {
@@ -258,14 +216,7 @@ fn handel_char(
 
             // Reset state
             section.reset();
-            return handel_char(
-                c,
-                section,
-                result,
-                syntax_map,
-                seek_string_reenter,
-                positioning,
-            );
+            return handel_char(c, section, result, syntax_map, positioning);
         }
 
         // If state = operator
@@ -290,14 +241,7 @@ fn handel_char(
                         positioning.build(),
                     ));
                     section.reset();
-                    return handel_char(
-                        c,
-                        section,
-                        result,
-                        syntax_map,
-                        seek_string_reenter,
-                        positioning,
-                    );
+                    return handel_char(c, section, result, syntax_map, positioning);
                 } else {
                     // Mark invalid operator
                     return Err(LexerError(
@@ -320,7 +264,7 @@ fn handel_char(
         }
 
         // If state = string
-        SectionState::String(quote, interpolator) => {
+        SectionState::String(quote) => {
             // Check for string close
             if c == *quote {
                 // Adjust positioning struct to include end quote
@@ -333,49 +277,6 @@ fn handel_char(
 
                 section.reset();
                 return Ok(());
-            }
-
-            // Check if interpolated string
-            if *interpolator == StringInterpolator::Interpolated {
-                // Check if found {} in intperpolated string
-                if c == FORMAT_STRING_GATES.0 {
-                    // Add current string as token
-                    result.push(Token(
-                        TokenType::String(section.content.clone()),
-                        positioning.build(),
-                    ));
-
-                    // Add string join operator
-                    result.push(Token(
-                        TokenType::Operator(Operator::Add),
-                        positioning.build(),
-                    ));
-
-                    // Add string func
-                    result.push(Token(
-                        TokenType::Identity("@String".to_string()),
-                        positioning.build(),
-                    ));
-
-                    // Add dot
-                    result.push(Token(
-                        TokenType::Operator(Operator::Dot),
-                        positioning.build(),
-                    ));
-
-                    // Add open parenthise operator
-                    result.push(Token(
-                        TokenType::Operator(Operator::OpenParen),
-                        positioning.build(),
-                    ));
-
-                    // set seek_string_reenter to true to collect rest of string
-                    *seek_string_reenter = (true, *quote);
-
-                    // Reset state machine
-                    section.reset();
-                    return Ok(());
-                }
             }
 
             // Add char to string
@@ -396,9 +297,6 @@ pub fn lex(input: &String) -> Result<Vec<Token>, LexerError> {
     // State machine
     let mut section: Section = Section::new();
 
-    // In {} of interpolated string
-    let mut seek_string_reenter = (false, '\0');
-
     // Create token position tracker
     let mut positioning = FileLocationModel {
         start_line: 0,
@@ -417,14 +315,7 @@ pub fn lex(input: &String) -> Result<Vec<Token>, LexerError> {
             positioning.end_col += 1;
         }
 
-        if let Err(err) = handel_char(
-            c,
-            &mut section,
-            &mut result,
-            &syntax_map,
-            &mut seek_string_reenter,
-            &mut positioning,
-        ) {
+        if let Err(err) = handel_char(c, &mut section, &mut result, &syntax_map, &mut positioning) {
             return Err(err);
         }
     }

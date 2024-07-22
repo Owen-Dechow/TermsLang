@@ -3,18 +3,19 @@
 # Custom Struct
 struct MyCustomStruct {
     let int val;
+    let int val2;
 }
 
 # Declare a Function
-func null do_a_thing: int this_many_times {
+func null do_a_thing: MyCustomStruct _struct {
     # Get user name
     println 'What is your name? ';
     let str name = readln.();
-    println f"Hello, {name}";
+    println "Hello, %!" % name ;
 
     # Create loop
-    loop i: i < this_many_times {
-        print "Number: {i}";
+    loop i: i < _struct.val {
+        println "Number: " + i.@str.();
         
         if i < 50 {
             continue;
@@ -23,16 +24,30 @@ func null do_a_thing: int this_many_times {
         }
     }
 
+    loop x: x < _struct.val2 {
+        let str type = null;
+        if x % 2 == 0 {
+            updt type = "even";
+        } else {
+            updt type = "odd";
+        }
+
+        print x.@str.() + " is an " + type + " number.";
+        println "";
+    }
+
     updt name = "My New Value";
     println name;
 }
 
 # main function
-func null main: str[] args {
+func null @main: str[] args {
 
     # Create MyCustomStruct Instance
-    let MyCustomStruct my_instance = $(100) MyCustomStruct;
+    let MyCustomStruct my_instance = $() MyCustomStruct;
+    updt my_instance.val = 1__00;
+    updt my_instance.val2 = 200;
 
     # Call a Function
-    cll do_a_thing.(my_instance.val);
+    cll do_a_thing.(my_instance);
 }

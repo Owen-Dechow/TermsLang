@@ -1,7 +1,6 @@
 pub mod errors;
 pub mod interpretor;
 pub mod lexer;
-pub mod llvm_compiler;
 pub mod parser;
 
 use std::fs;

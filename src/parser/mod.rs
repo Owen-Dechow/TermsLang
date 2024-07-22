@@ -1,9 +1,6 @@
 use crate::{
     errors::{FileLocation, ParserError},
-    lexer::{
-        syntax::PROGRAM_ENTRY,
-        tokens::{KeyWord, Operator, Token, TokenType},
-    },
+    lexer::tokens::{KeyWord, Operator, Token, TokenType},
 };
 
 use self::{
@@ -105,6 +102,7 @@ pub struct Function {
 pub struct Struct {
     pub name: String,
     pub properties: Vec<VarSigniture>,
+    pub methods: Vec<Function>,
 }
 
 #[derive(Debug, Clone)]
@@ -524,15 +522,7 @@ fn parse_func(token_stream: &mut TokenStream) -> Result<Function, ParserError> {
 fn parse_struct(token_stream: &mut TokenStream) -> Result<Struct, ParserError> {
     let name = match token_stream.advance().cloned() {
         Some(op) => match op.0 {
-            TokenType::Identity(id) => match id.as_str() {
-                PROGRAM_ENTRY => {
-                    return Err(ParserError(
-                        format!("Cannot name struct {}", PROGRAM_ENTRY),
-                        op.1,
-                    ))
-                }
-                _ => id,
-            },
+            TokenType::Identity(id) => id,
             _ => {
                 return Err(ParserError(
                     "Unexpected token in place of class name".to_string(),
@@ -613,7 +603,11 @@ fn parse_struct(token_stream: &mut TokenStream) -> Result<Struct, ParserError> {
         }
     }
 
-    return Ok(Struct { name, properties });
+    return Ok(Struct {
+        name,
+        properties,
+        methods: Vec::new(),
+    });
 }
 
 // Parse code within block

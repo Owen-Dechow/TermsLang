@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::tokens::{KeyWord, Operator, StringInterpolator};
+use super::tokens::{KeyWord, Operator};
 
 pub const WHITE_SPACE: &str = " \n\t";
 pub const DECIMAL: char = '.';
@@ -9,14 +9,11 @@ pub const COMMENT: char = '#';
 pub const NEW_LINE: char = '\n';
 pub const LINE_TERMINATOR: char = ';';
 pub const STRING_QUOTES: &str = "\"'`";
-pub const FORMAT_STRING_GATES: (char, char) = ('{', '}');
 pub const IGNORED_IN_NUMBERS: &str = "_";
-pub const PROGRAM_ENTRY: &str = "main";
 
 pub struct SyntaxMap<'a> {
     pub operators: HashMap<&'a str, Operator>,
     pub keywords: HashMap<&'a str, KeyWord>,
-    pub string_interpolators: HashMap<&'a str, StringInterpolator>,
     pub bools: HashMap<&'a str, bool>,
 }
 
@@ -71,10 +68,6 @@ pub fn get_syntax_map() -> SyntaxMap<'static> {
             ("break", KeyWord::Break),
             ("continue", KeyWord::Continue),
             ("return", KeyWord::Return),
-        ]),
-        string_interpolators: HashMap::<&str, StringInterpolator>::from([
-            ("f", StringInterpolator::Interpolated),
-            ("r", StringInterpolator::Raw),
         ]),
         bools: HashMap::<&str, bool>::from([("true", true), ("false", false)]),
     };

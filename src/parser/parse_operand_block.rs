@@ -220,6 +220,8 @@ fn parse_slice(
         }
     }
 
+    println!("{slice:?}");
+
     return Err(ParserError(
         "Operand parse falls through".to_string(),
         match slice.last() {
@@ -235,6 +237,7 @@ pub fn parse_operand_block(
 ) -> Result<OperandExpression, ParserError> {
     let operand_list = {
         let mut operand_list = Vec::<OperandComponent>::new();
+        let mut parethese_layers = 1;
 
         loop {
             let token = match token_stream.advance() {
@@ -247,19 +250,33 @@ pub fn parse_operand_block(
                 }
             };
 
+            if terminating_tokens.contains(&TokenType::Operator(Operator::CloseParen)) {
+                if token.0 == TokenType::Operator(Operator::OpenParen) {
+                    parethese_layers += 1;
+                }
+            }
+
             // Check for terminating token
             let mut break_loop = false;
             for terminating_token in &terminating_tokens {
                 if terminating_token == &token.0 {
-                    break_loop = true;
-                    break;
+                    if terminating_token == &TokenType::Operator(Operator::CloseParen) {
+                        parethese_layers -= 1;
+                        if parethese_layers <= 0 {
+                            break_loop = true;
+                            break;
+                        }
+                    } else {
+                        break_loop = true;
+                        break;
+                    }
                 }
             }
             if break_loop {
                 break;
             }
 
-            let translated_token = match token.0 {
+            let translated_token = match &token.0 {
                 TokenType::Int(_) => OperandComponent::Literal(token.clone()),
                 TokenType::Float(_) => OperandComponent::Literal(token.clone()),
                 TokenType::String(_) => OperandComponent::Literal(token.clone()),
