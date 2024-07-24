@@ -130,9 +130,7 @@ impl GarbageCollector {
             let key = random();
             self.global_methods.insert(key, func_def);
 
-            if syntax::OVERRIDEABLE_METHODS.contains(&method.name.as_str()) {
-                methods.insert(method.name, key);
-            }
+            methods.insert(method.name, key);
         }
 
         let struct_def = StructDef::User {
@@ -198,21 +196,14 @@ impl GarbageCollector {
     ) -> Result<u32, RuntimeError> {
         match &object.kind {
             ObjectType::Identity(id) => {
-                let key = vr.resolve_string(id);
+                let key = vr.resolve_string(id)?;
 
                 match &object.sub {
-                    Some(sub) => self.resolve_sub_object(key?, &*sub, vr),
-                    None => key,
+                    Some(sub) => self.resolve_sub_object(key, &*sub, vr),
+                    None => Ok(key),
                 }
             }
-            ObjectType::Call(_) => Err(RuntimeError(
-                "Cannot directly resolve call".to_string(),
-                FileLocation::None,
-            )),
-            ObjectType::Index(_) => Err(RuntimeError(
-                "Cannot directly resolve index".to_string(),
-                FileLocation::None,
-            )),
+            _ => todo!(),
         }
     }
 
@@ -231,7 +222,7 @@ impl GarbageCollector {
                     match &object.sub {
                         Some(sub) => match &sub.kind {
                             ObjectType::Call(call) => {
-                                let data_object = self.objects[&parent].data.clone();
+                                let mut data_object = self.objects[&parent].data.clone();
                                 let args = {
                                     let mut args = Vec::new();
                                     for arg in &call.args {
@@ -279,6 +270,63 @@ impl GarbageCollector {
         }
     }
 
+    fn reslove_array_sub(
+        &mut self,
+        object: &Object,
+        id: &String,
+        parent: u32,
+        vr: &VariableRegistry,
+    ) -> Result<u32, RuntimeError> {
+        if syntax::ARRAY_METHODS.contains(&id.as_str()) {
+            match &object.sub {
+                Some(sub) => match &sub.kind {
+                    ObjectType::Call(call) => {
+                        let args = {
+                            let mut args = Vec::new();
+                            for arg in &call.args {
+                                args.push(interpret_operand_expression(&arg, self, vr)?)
+                            }
+                            args
+                        };
+
+                        let result = match DataObject::call_array_func(parent, self, id, args)? {
+                            ExitMethod::ImplicitNullReturn => todo!(),
+                            ExitMethod::ExplicitReturn(id) => Ok(id),
+                            ExitMethod::LoopContinue => todo!(),
+                            ExitMethod::LoopBreak => todo!(),
+                        }?;
+
+                        match &sub.sub {
+                            Some(sub) => self.resolve_sub_object(result, &*sub, vr),
+                            None => Ok(result),
+                        }
+                    }
+                    _ => Err(RuntimeError(
+                        format!(
+                            "{}{}",
+                            "Array type functions must be called; alias creation, indexing,",
+                            " and object peeking is not allowed."
+                        ),
+                        FileLocation::None,
+                    )),
+                },
+                None => Err(RuntimeError(
+                    format!(
+                        "{}{}",
+                        "Array type functions must be called; alias creation, indexing,",
+                        " and object peeking is not allowed."
+                    ),
+                    FileLocation::None,
+                )),
+            }
+        } else {
+            Err(RuntimeError(
+                format!("{} no field or method found on array", id),
+                FileLocation::None,
+            ))
+        }
+    }
+
     pub fn create_null_object(&mut self) -> u32 {
         let key = random();
 
@@ -306,19 +354,37 @@ impl GarbageCollector {
                         Some(sub) => self.resolve_sub_object(*key, &*sub, vr),
                         None => Ok(*key),
                     },
-                    None => Err(RuntimeError(
-                        format!("No field or method {} on struct", id),
-                        FileLocation::None,
-                    )),
+                    None => {
+                        let struct_def = &self.global_structs[&struct_object._type];
+                        if let StructDef::User { methods, .. } = struct_def {
+                            match methods.get(id) {
+                                Some(func_def) => match &object.sub {
+                                    Some(sub) => self.resolve_sub_object(*func_def, &*sub, vr),
+                                    None => Err(RuntimeError(
+                                        format!(
+                                            "Cannot reference function, {}, without calling",
+                                            id
+                                        ),
+                                        FileLocation::None,
+                                    )),
+                                },
+                                None => {
+                                    return Err(RuntimeError(
+                                        format!("No field or method {} on struct", id),
+                                        FileLocation::None,
+                                    ))
+                                }
+                            }
+                        } else {
+                            todo!()
+                        }
+                    }
                 },
                 DataObject::RootObject(root_object) => {
                     let root_def = root_object.get_root_type_def(self);
                     self.resolve_root_sub(root_def, object, id, parent, vr)
                 }
-                DataObject::ArrayObject(_) => Err(RuntimeError(
-                    "Array types do not have fields".to_string(),
-                    FileLocation::None,
-                )),
+                DataObject::ArrayObject(..) => self.reslove_array_sub(object, id, parent, vr),
             },
             ObjectType::Call(call) => match self.global_methods.get(&parent) {
                 Some(func_def) => {
@@ -347,7 +413,38 @@ impl GarbageCollector {
                     FileLocation::None,
                 )),
             },
-            ObjectType::Index(_) => todo!(),
+            ObjectType::Index(idx) => {
+                let args = vec![interpret_operand_expression(idx, self, vr)?];
+
+                let parent_obj = &mut self.objects.get_mut(&parent).unwrap().data;
+                let result = match parent_obj {
+                    DataObject::StructObject(..) => {
+                        todo!()
+                    }
+                    DataObject::RootObject(..) => {
+                        return Err(RuntimeError(
+                            "Cannot index into root object".to_string(),
+                            FileLocation::None,
+                        ))
+                    }
+                    DataObject::ArrayObject(..) => match DataObject::call_array_func(
+                        parent,
+                        self,
+                        &syntax::INDEX_FUNC.to_string(),
+                        args,
+                    )? {
+                        ExitMethod::ImplicitNullReturn => todo!(),
+                        ExitMethod::ExplicitReturn(id) => Ok(id),
+                        ExitMethod::LoopContinue => todo!(),
+                        ExitMethod::LoopBreak => todo!(),
+                    }?,
+                };
+
+                match &object.sub {
+                    Some(sub) => self.resolve_sub_object(result, &*sub, vr),
+                    None => Ok(result),
+                }
+            }
         }
     }
 
@@ -404,11 +501,7 @@ impl GarbageCollector {
             TypeResolve::Standard(std) => {
                 let struct_def = self.get_struct_def_from_id(std)?.clone();
                 match struct_def {
-                    StructDef::Root {
-                        _type: _root_def,
-                        name: _name,
-                        ..
-                    } => {
+                    StructDef::Root { .. } => {
                         return Err(RuntimeError(
                             "Cannot directly construct root type".to_string(),
                             FileLocation::None,
@@ -441,5 +534,11 @@ impl GarbageCollector {
         self.objects.insert(key, DataCase { ref_count: 0, data });
 
         return Ok(key);
+    }
+
+    pub fn release(&mut self, key: u32) {
+        if let Some(DataCase { ref_count: 0, .. }) = self.objects.get(&key) {
+            self.objects.remove(&key);
+        }
     }
 }

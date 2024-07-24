@@ -556,6 +556,7 @@ fn parse_struct(token_stream: &mut TokenStream) -> Result<Struct, ParserError> {
     };
 
     let mut properties = Vec::<VarSigniture>::new();
+    let mut methods = Vec::<Function>::new();
     loop {
         if let Some(Token(TokenType::Operator(Operator::CloseBlock), _)) = token_stream.advance() {
             break;
@@ -587,6 +588,10 @@ fn parse_struct(token_stream: &mut TokenStream) -> Result<Struct, ParserError> {
 
                     properties.push(var_sig);
                 }
+                Token(TokenType::KeyWord(KeyWord::Func), _) => {
+                    let func = parse_func(token_stream)?;
+                    methods.push(func);
+                }
                 _ => {
                     return Err(ParserError(
                         "Unexpected token within class block".to_string(),
@@ -606,7 +611,7 @@ fn parse_struct(token_stream: &mut TokenStream) -> Result<Struct, ParserError> {
     return Ok(Struct {
         name,
         properties,
-        methods: Vec::new(),
+        methods,
     });
 }
 
@@ -716,6 +721,5 @@ pub fn parse(input: Vec<Token>) -> Result<Program, ParserError> {
             ))
         }
     };
-    println!("{}", _program_prelude);
     return parse_program(&mut token_stream);
 }

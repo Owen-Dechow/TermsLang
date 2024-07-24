@@ -18,6 +18,7 @@ pub enum TokenType {
     Identity(String),
     Operator(Operator),
     KeyWord(KeyWord),
+    Comment(String),
     Terminate,
 }
 
@@ -32,6 +33,7 @@ impl Display for TokenType {
             TokenType::Operator(operator) => format!("Operator:{operator}"),
             TokenType::KeyWord(keyword) => format!("KewWord:{keyword}"),
             TokenType::Terminate => format!("Terminator"),
+            TokenType::Comment(comment) => format!("String:\"{comment}\""),
         };
 
         return write!(f, "Token({name})");

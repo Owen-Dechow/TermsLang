@@ -1,7 +1,7 @@
 use rand::random;
 
 use super::{
-    syntax::{self, ADD_FUNC, LESS_FUNC, MODULO_FUNC},
+    syntax::{self as syn},
     DataCase, DataObject, ExitMethod, GarbageCollector, RootObject, StructDef,
 };
 use crate::errors::{FileLocation, RuntimeError};
@@ -48,39 +48,7 @@ macro_rules! invalid_right_hand_side_root {
     };
 }
 
-pub fn add(
-    left: &RootObject,
-    gc: &mut GarbageCollector,
-    args: Vec<u32>,
-) -> Result<ExitMethod, RuntimeError> {
-    let right_id = match args.first() {
-        Some(id) => id,
-        None => {
-            return Err(RuntimeError(
-                format!("{} must have at least one argument", ADD_FUNC),
-                FileLocation::None,
-            ))
-        }
-    };
-    let right_object = &gc.objects[right_id].data;
-    let right: &RootObject = match right_object {
-        DataObject::StructObject(_) => todo!(),
-        DataObject::RootObject(right) => right,
-        DataObject::ArrayObject(_) => todo!(),
-    };
-    let result = add_roots(left, &right, &gc)?;
-    let key = random();
-    gc.objects.insert(
-        key,
-        DataCase {
-            ref_count: 0,
-            data: DataObject::RootObject(result),
-        },
-    );
-    Ok(ExitMethod::ExplicitReturn(key))
-}
-
-fn add_roots(
+pub fn add_roots(
     left: &RootObject,
     right: &RootObject,
     gc: &GarbageCollector,
@@ -106,39 +74,27 @@ fn add_roots(
     })
 }
 
-pub fn less(
+pub fn subtract_roots(
     left: &RootObject,
-    gc: &mut GarbageCollector,
-    args: Vec<u32>,
-) -> Result<ExitMethod, RuntimeError> {
-    let right_id = match args.first() {
-        Some(id) => id,
-        None => {
-            return Err(RuntimeError(
-                format!("{} must have at least one argument", LESS_FUNC),
-                FileLocation::None,
-            ))
-        }
-    };
-    let right_object = &gc.objects[right_id].data;
-    let right: &RootObject = match right_object {
-        DataObject::StructObject(_) => todo!(),
-        DataObject::RootObject(right) => right,
-        DataObject::ArrayObject(_) => todo!(),
-    };
-    let result = less_roots(left, &right, &gc)?;
-    let key = random();
-    gc.objects.insert(
-        key,
-        DataCase {
-            ref_count: 0,
-            data: DataObject::RootObject(result),
+    right: &RootObject,
+    gc: &GarbageCollector,
+) -> Result<RootObject, RuntimeError> {
+    Ok(match left {
+        RootObject::Int(left_int) => match right {
+            RootObject::Int(right_int) => RootObject::Int(left_int - right_int),
+            RootObject::Float(right_float) => RootObject::Float(*left_int as f32 - right_float),
+            _ => return invalid_right_hand_side_root!(left, right, gc),
         },
-    );
-    Ok(ExitMethod::ExplicitReturn(key))
+        RootObject::Float(left_float) => match right {
+            RootObject::Int(right_int) => RootObject::Float(left_float - *right_int as f32),
+            RootObject::Float(right_float) => RootObject::Float(left_float - right_float),
+            _ => return invalid_right_hand_side_root!(left, right, gc),
+        },
+        _ => return invalid_right_hand_side_root!(left, right, gc),
+    })
 }
 
-fn less_roots(
+pub fn less_roots(
     left: &RootObject,
     right: &RootObject,
     gc: &GarbageCollector,
@@ -158,59 +114,7 @@ fn less_roots(
     })
 }
 
-pub fn to_string(root: &RootObject, gc: &mut GarbageCollector) -> Result<ExitMethod, RuntimeError> {
-    let string = match root {
-        RootObject::String(string) => string.to_owned(),
-        RootObject::Int(int) => int.to_string(),
-        RootObject::Float(float) => float.to_string(),
-        RootObject::Bool(_bool) => _bool.to_string(),
-        RootObject::Null => String::from(syntax::NULL_STRING),
-    };
-
-    let key = random();
-    gc.objects.insert(
-        key,
-        DataCase {
-            ref_count: 0,
-            data: DataObject::RootObject(RootObject::String(string)),
-        },
-    );
-    Ok(ExitMethod::ExplicitReturn(key))
-}
-
-pub fn modulo(
-    left: &RootObject,
-    gc: &mut GarbageCollector,
-    args: Vec<u32>,
-) -> Result<ExitMethod, RuntimeError> {
-    let right_id = match args.first() {
-        Some(id) => id,
-        None => {
-            return Err(RuntimeError(
-                format!("{} must have at least one argument", MODULO_FUNC),
-                FileLocation::None,
-            ))
-        }
-    };
-    let right_object = &gc.objects[right_id].data;
-    let right: &RootObject = match right_object {
-        DataObject::StructObject(_) => todo!(),
-        DataObject::RootObject(right) => right,
-        DataObject::ArrayObject(_) => todo!(),
-    };
-    let result = modulo_roots(left, &right, &gc)?;
-    let key = random();
-    gc.objects.insert(
-        key,
-        DataCase {
-            ref_count: 0,
-            data: DataObject::RootObject(result),
-        },
-    );
-    Ok(ExitMethod::ExplicitReturn(key))
-}
-
-fn modulo_roots(
+pub fn modulo_roots(
     left: &RootObject,
     right: &RootObject,
     gc: &GarbageCollector,
@@ -239,13 +143,13 @@ fn modulo_roots(
 pub fn equal(
     left: &RootObject,
     gc: &mut GarbageCollector,
-    args: Vec<u32>,
+    args: &Vec<u32>,
 ) -> Result<ExitMethod, RuntimeError> {
     let right_id = match args.first() {
         Some(id) => id,
         None => {
             return Err(RuntimeError(
-                format!("{} must have at least one argument", MODULO_FUNC),
+                format!("{} must have at least one argument", syn::EQUAL_FUNC),
                 FileLocation::None,
             ))
         }
@@ -292,4 +196,365 @@ fn equal_roots(left: &RootObject, right: &RootObject) -> Result<RootObject, Runt
             _ => RootObject::Bool(false),
         },
     })
+}
+
+pub fn less_or_equal_roots(
+    left: &RootObject,
+    right: &RootObject,
+    gc: &GarbageCollector,
+) -> Result<RootObject, RuntimeError> {
+    Ok(match left {
+        RootObject::Int(left_int) => match right {
+            RootObject::Int(right_int) => RootObject::Bool(left_int <= right_int),
+            RootObject::Float(right_float) => RootObject::Bool(*left_int as f32 <= *right_float),
+            _ => RootObject::Bool(false),
+        },
+        RootObject::Float(left_float) => match right {
+            RootObject::Int(right_int) => RootObject::Bool(*left_float <= *right_int as f32),
+            RootObject::Float(right_float) => RootObject::Bool(left_float <= right_float),
+            _ => RootObject::Bool(false),
+        },
+        _ => return invalid_right_hand_side_root!(left, right, gc),
+    })
+}
+
+pub fn greater_or_equal_roots(
+    left: &RootObject,
+    right: &RootObject,
+    gc: &GarbageCollector,
+) -> Result<RootObject, RuntimeError> {
+    Ok(match left {
+        RootObject::Int(left_int) => match right {
+            RootObject::Int(right_int) => RootObject::Bool(left_int <= right_int),
+            RootObject::Float(right_float) => RootObject::Bool(*left_int as f32 >= *right_float),
+            _ => RootObject::Bool(false),
+        },
+        RootObject::Float(left_float) => match right {
+            RootObject::Int(right_int) => RootObject::Bool(*left_float >= *right_int as f32),
+            RootObject::Float(right_float) => RootObject::Bool(left_float >= right_float),
+            _ => RootObject::Bool(false),
+        },
+        _ => return invalid_right_hand_side_root!(left, right, gc),
+    })
+}
+
+pub fn greater_roots(
+    left: &RootObject,
+    right: &RootObject,
+    gc: &GarbageCollector,
+) -> Result<RootObject, RuntimeError> {
+    Ok(match left {
+        RootObject::Int(left_int) => match right {
+            RootObject::Int(right_int) => RootObject::Bool(left_int > right_int),
+            RootObject::Float(right_float) => RootObject::Bool(*left_int as f32 > *right_float),
+            _ => RootObject::Bool(false),
+        },
+        RootObject::Float(left_float) => match right {
+            RootObject::Int(right_int) => RootObject::Bool(*left_float > *right_int as f32),
+            RootObject::Float(right_float) => RootObject::Bool(left_float > right_float),
+            _ => RootObject::Bool(false),
+        },
+        _ => return invalid_right_hand_side_root!(left, right, gc),
+    })
+}
+
+pub fn to_string(root: &RootObject, gc: &mut GarbageCollector) -> Result<ExitMethod, RuntimeError> {
+    let string = match root {
+        RootObject::String(string) => string.to_owned(),
+        RootObject::Int(int) => int.to_string(),
+        RootObject::Float(float) => float.to_string(),
+        RootObject::Bool(_bool) => _bool.to_string(),
+        RootObject::Null => String::from(syn::NULL_STRING),
+    };
+
+    let key = random();
+    gc.objects.insert(
+        key,
+        DataCase {
+            ref_count: 0,
+            data: DataObject::RootObject(RootObject::String(string)),
+        },
+    );
+    Ok(ExitMethod::ExplicitReturn(key))
+}
+
+pub fn multiply_roots(
+    left: &RootObject,
+    right: &RootObject,
+    gc: &GarbageCollector,
+) -> Result<RootObject, RuntimeError> {
+    Ok(match left {
+        RootObject::String(left_string) => match right {
+            RootObject::Int(right_int) => {
+                RootObject::String(left_string.repeat(match (*right_int).try_into() {
+                    Ok(ok) => ok,
+                    Err(_) => {
+                        return Err(RuntimeError(
+                            format!("{} is not a valid string multiplyer.", right_int),
+                            FileLocation::None,
+                        ))
+                    }
+                }))
+            }
+            _ => return invalid_right_hand_side_root!(left, right, gc),
+        },
+        RootObject::Int(left_int) => match right {
+            RootObject::Int(right_int) => RootObject::Int(left_int * right_int),
+            RootObject::Float(right_float) => RootObject::Float((*left_int as f32) * right_float),
+            _ => return invalid_right_hand_side_root!(left, right, gc),
+        },
+        RootObject::Float(left_float) => match right {
+            RootObject::Int(right_int) => RootObject::Float(left_float * (*right_int as f32)),
+            RootObject::Float(right_float) => RootObject::Float(left_float * right_float),
+            _ => return invalid_right_hand_side_root!(left, right, gc),
+        },
+        _ => return invalid_right_hand_side_root!(left, right, gc),
+    })
+}
+
+pub fn divide_roots(
+    left: &RootObject,
+    right: &RootObject,
+    gc: &GarbageCollector,
+) -> Result<RootObject, RuntimeError> {
+    Ok(match left {
+        RootObject::Int(left_int) => match right {
+            RootObject::Int(right_int) => RootObject::Int(left_int / right_int),
+            RootObject::Float(right_float) => RootObject::Float((*left_int as f32) / right_float),
+            _ => return invalid_right_hand_side_root!(left, right, gc),
+        },
+        RootObject::Float(left_float) => match right {
+            RootObject::Int(right_int) => RootObject::Float(left_float / (*right_int as f32)),
+            RootObject::Float(right_float) => RootObject::Float(left_float / right_float),
+            _ => return invalid_right_hand_side_root!(left, right, gc),
+        },
+        _ => return invalid_right_hand_side_root!(left, right, gc),
+    })
+}
+
+pub fn exponent_roots(
+    left: &RootObject,
+    right: &RootObject,
+    gc: &GarbageCollector,
+) -> Result<RootObject, RuntimeError> {
+    Ok(match left {
+        RootObject::Int(left_int) => match right {
+            RootObject::Int(right_int) => {
+                RootObject::Int(left_int.pow(match (*right_int).try_into() {
+                    Err(_) => {
+                        return Err(RuntimeError(
+                            format!("{} is not a valid power", right_int),
+                            FileLocation::None,
+                        ))
+                    }
+                    Ok(val) => val,
+                }))
+            }
+            RootObject::Float(right_float) => {
+                RootObject::Float((*left_int as f32).powf(*right_float))
+            }
+            _ => return invalid_right_hand_side_root!(left, right, gc),
+        },
+        RootObject::Float(left_float) => match right {
+            RootObject::Int(right_int) => RootObject::Float(left_float.powi(*right_int)),
+            RootObject::Float(right_float) => RootObject::Float(left_float.powf(*right_float)),
+            _ => return invalid_right_hand_side_root!(left, right, gc),
+        },
+        _ => return invalid_right_hand_side_root!(left, right, gc),
+    })
+}
+
+pub fn or_roots(
+    left: &RootObject,
+    right: &RootObject,
+    gc: &GarbageCollector,
+) -> Result<RootObject, RuntimeError> {
+    Ok(match left {
+        RootObject::Bool(left_bool) => match right {
+            RootObject::Bool(right_bool) => RootObject::Bool(*left_bool || *right_bool),
+            _ => return invalid_right_hand_side_root!(left, right, gc),
+        },
+        _ => return invalid_right_hand_side_root!(left, right, gc),
+    })
+}
+
+pub fn and_roots(
+    left: &RootObject,
+    right: &RootObject,
+    gc: &GarbageCollector,
+) -> Result<RootObject, RuntimeError> {
+    Ok(match left {
+        RootObject::Bool(left_bool) => match right {
+            RootObject::Bool(right_bool) => RootObject::Bool(*left_bool && *right_bool),
+            _ => return invalid_right_hand_side_root!(left, right, gc),
+        },
+        _ => return invalid_right_hand_side_root!(left, right, gc),
+    })
+}
+
+pub fn std_binary_operation(
+    left: &RootObject,
+    gc: &mut GarbageCollector,
+    args: &Vec<u32>,
+    function_name: &str,
+    operation: &dyn Fn(
+        &RootObject,
+        &RootObject,
+        &GarbageCollector,
+    ) -> Result<RootObject, RuntimeError>,
+) -> Result<ExitMethod, RuntimeError> {
+    let right_id = match args.first() {
+        Some(id) => id,
+        None => {
+            return Err(RuntimeError(
+                format!("{} must have at least one argument", function_name),
+                FileLocation::None,
+            ))
+        }
+    };
+    let right_object = &gc.objects[right_id].data;
+    let right = match right_object {
+        DataObject::StructObject(_) => todo!(),
+        DataObject::RootObject(right) => right,
+        DataObject::ArrayObject(_) => todo!(),
+    };
+    let result = operation(&left, &right, &gc)?;
+    let key = random();
+    gc.objects.insert(
+        key,
+        DataCase {
+            ref_count: 0,
+            data: DataObject::RootObject(result),
+        },
+    );
+    Ok(ExitMethod::ExplicitReturn(key))
+}
+
+pub fn remove(
+    id: u32,
+    gc: &mut GarbageCollector,
+    args: &Vec<u32>,
+) -> Result<ExitMethod, RuntimeError> {
+    let mut len = match &gc.objects[&id].data {
+        DataObject::ArrayObject(arr) => arr.0.len() as i32,
+        _ => todo!(),
+    };
+
+    for arg in args {
+        let arg_object = &gc.objects[arg].data;
+        let idx = match arg_object {
+            DataObject::RootObject(RootObject::Int(idx)) => *idx,
+            _ => {
+                return Err(RuntimeError(
+                    format!("All {} arguments must be integers.", syn::REMOVE_FUNC),
+                    FileLocation::None,
+                ))
+            }
+        };
+
+        if idx >= len {
+            return Err(RuntimeError(
+                format!("Index, {}, out of range.", idx),
+                FileLocation::None,
+            ));
+        } else if idx < 0 {
+            return Err(RuntimeError(
+                format!("Index, {}, out of range.", idx),
+                FileLocation::None,
+            ));
+        } else {
+            let arr = match gc.objects.get_mut(&id).unwrap().data {
+                DataObject::ArrayObject(ref mut arr) => arr,
+                _ => todo!(),
+            };
+            arr.0.remove(idx as usize);
+            len -= 1;
+        }
+    }
+
+    return Ok(ExitMethod::ExplicitReturn(gc.create_null_object()));
+}
+
+pub fn index(
+    id: u32,
+    gc: &mut GarbageCollector,
+    args: &Vec<u32>,
+) -> Result<ExitMethod, RuntimeError> {
+    let len = match &gc.objects[&id].data {
+        DataObject::ArrayObject(arr) => arr.0.len() as i32,
+        _ => todo!(),
+    };
+    let arg_object = &gc.objects[match args.first() {
+        Some(obj) => obj,
+        None => {
+            return Err(RuntimeError(
+                format!("{} must have an argument.", syn::INDEX_FUNC),
+                FileLocation::None,
+            ))
+        }
+    }]
+    .data;
+    let idx = match arg_object {
+        DataObject::RootObject(RootObject::Int(idx)) => idx,
+        _ => {
+            return Err(RuntimeError(
+                format!("{} argument must be integer.", syn::INDEX_FUNC),
+                FileLocation::None,
+            ))
+        }
+    };
+
+    let result = if idx >= &len {
+        return Err(RuntimeError(
+            format!("Index, {}, out of range.", idx),
+            FileLocation::None,
+        ));
+    } else if idx < &0 {
+        return Err(RuntimeError(
+            format!("Index, {}, out of range.", idx),
+            FileLocation::None,
+        ));
+    } else {
+        match &gc.objects[&id].data {
+            DataObject::ArrayObject(arr) => arr.0[*idx as usize],
+            _ => todo!(),
+        }
+    };
+
+    return Ok(ExitMethod::ExplicitReturn(result));
+}
+
+pub fn append(
+    id: u32,
+    gc: &mut GarbageCollector,
+    args: &Vec<u32>,
+) -> Result<ExitMethod, RuntimeError> {
+    for arg in args {
+        gc.objects.get_mut(arg).unwrap().ref_count += 1;
+        let arr = match gc.objects.get_mut(&id).unwrap().data {
+            DataObject::ArrayObject(ref mut arr) => arr,
+            _ => todo!(),
+        };
+        arr.0.push(*arg);
+    }
+
+    return Ok(ExitMethod::ExplicitReturn(gc.create_null_object()));
+}
+
+pub fn len(id: u32, gc: &mut GarbageCollector) -> Result<ExitMethod, RuntimeError> {
+    let key = random();
+
+    let len = match &gc.objects[&id].data {
+        DataObject::ArrayObject(arr) => arr.0.len() as i32,
+        _ => todo!(),
+    };
+    gc.objects.insert(
+        key,
+        DataCase {
+            ref_count: 0,
+            data: DataObject::RootObject(RootObject::Int(len)),
+        },
+    );
+
+    return Ok(ExitMethod::ExplicitReturn(key));
 }

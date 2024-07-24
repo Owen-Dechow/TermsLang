@@ -9,14 +9,14 @@ struct MyCustomStruct {
 # Declare a Function
 func null do_a_thing: MyCustomStruct _struct {
     # Get user name
-    println 'What is your name? ';
-    let str name = readln.();
-    println "Hello, %!" % name ;
+    cll 'What is your name? ';
+    let str name = "Owen";
+    cll "Hello, %!" % name;
 
     # Create loop
     loop i: i < _struct.val {
-        println "Number: " + i.@str.();
-        
+        cll "Number: " + i.@str.();
+
         if i < 50 {
             continue;
         } else {
@@ -32,17 +32,14 @@ func null do_a_thing: MyCustomStruct _struct {
             updt type = "odd";
         }
 
-        print x.@str.() + " is an " + type + " number.";
-        println "";
+        cll x.@str.() + " is an " + type + " number.";
     }
 
     updt name = "My New Value";
-    println name;
 }
 
 # main function
-func null @main: str[] args {
-
+func null amain: str[] args {
     # Create MyCustomStruct Instance
     let MyCustomStruct my_instance = $() MyCustomStruct;
     updt my_instance.val = 1__00;
@@ -50,4 +47,23 @@ func null @main: str[] args {
 
     # Call a Function
     cll do_a_thing.(my_instance);
+}
+
+func int fib: int n {
+    if n <= 1 {
+        return n;
+    } else {
+        return fib.(n - 1) + fib.(n - 2);
+    }
+}
+
+func int @main: str[] args {
+    println fib.(20).@str.();
+    println amain.(args).@str.();
+    let int[] a = $() int[];
+    cll a.@append.("goat", "PIG", 34);
+    cll a.@append.("23", "PIG", 34);
+    println a.@len.().@str.();
+    println a.[3].@str.();
+    println args.[1];
 }

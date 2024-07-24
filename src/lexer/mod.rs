@@ -78,6 +78,7 @@ fn handel_char(
     result: &mut Vec<Token>,
     syntax_map: &SyntaxMap,
     positioning: &mut FileLocationModel,
+    lex_comments: bool,
 ) -> Result<(), LexerError> {
     // Handel character based on state
     match &section.state {
@@ -156,7 +157,7 @@ fn handel_char(
                 positioning.build(),
             ));
             section.reset();
-            return handel_char(c, section, result, syntax_map, positioning);
+            return handel_char(c, section, result, syntax_map, positioning, lex_comments);
         }
 
         // If state = float
@@ -178,7 +179,7 @@ fn handel_char(
                 positioning.build(),
             ));
             section.reset();
-            return handel_char(c, section, result, syntax_map, positioning);
+            return handel_char(c, section, result, syntax_map, positioning, lex_comments);
         }
 
         // If state = Word (Variable or Kewword)
@@ -216,7 +217,7 @@ fn handel_char(
 
             // Reset state
             section.reset();
-            return handel_char(c, section, result, syntax_map, positioning);
+            return handel_char(c, section, result, syntax_map, positioning, lex_comments);
         }
 
         // If state = operator
@@ -241,7 +242,7 @@ fn handel_char(
                         positioning.build(),
                     ));
                     section.reset();
-                    return handel_char(c, section, result, syntax_map, positioning);
+                    return handel_char(c, section, result, syntax_map, positioning, lex_comments);
                 } else {
                     // Mark invalid operator
                     return Err(LexerError(
@@ -256,7 +257,15 @@ fn handel_char(
         SectionState::Comment => {
             // Check to see if comment line complete
             if c == NEW_LINE {
-                section.reset()
+                if lex_comments {
+                    result.push(Token(
+                        TokenType::Comment(section.content.clone()),
+                        positioning.build(),
+                    ))
+                }
+                section.reset();
+            } else {
+                section.content.push(c);
             }
 
             // Skip char in comment
@@ -287,7 +296,7 @@ fn handel_char(
 }
 
 // Lex a program (input)
-pub fn lex(input: &String) -> Result<Vec<Token>, LexerError> {
+pub fn lex(input: &String, lex_comments: bool) -> Result<Vec<Token>, LexerError> {
     // Create syntax map
     let syntax_map = get_syntax_map();
 
@@ -306,6 +315,7 @@ pub fn lex(input: &String) -> Result<Vec<Token>, LexerError> {
     };
 
     // Lex tokens
+    let input = format!("{input}\n");
     let iter = input.chars().peekable();
     for c in iter {
         if c == '\n' {
@@ -315,7 +325,14 @@ pub fn lex(input: &String) -> Result<Vec<Token>, LexerError> {
             positioning.end_col += 1;
         }
 
-        if let Err(err) = handel_char(c, &mut section, &mut result, &syntax_map, &mut positioning) {
+        if let Err(err) = handel_char(
+            c,
+            &mut section,
+            &mut result,
+            &syntax_map,
+            &mut positioning,
+            lex_comments,
+        ) {
             return Err(err);
         }
     }
