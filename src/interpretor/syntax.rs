@@ -3,6 +3,8 @@ use crate::lexer::tokens::Operator;
 pub const PROGRAM_ENTRY: &str = "@main";
 pub const NULL_STRING: &str = "null";
 
+pub const STRUCT_SELF: &str = "@this";
+
 pub const ADD_FUNC: &str = "@add";
 pub const SUBTRACT_FUNC: &str = "@subtract";
 pub const MULTIPLY_FUNC: &str = "@multiply";
@@ -21,6 +23,8 @@ pub const OR_FUNC: &str = "@or";
 pub const TO_STRING_FUNC: &str = "@str";
 pub const TO_INT_FUNC: &str = "@int";
 pub const TO_FLOAT_FUNC: &str = "@float";
+
+pub const NEW_FUNC: &str = "@new";
 
 pub const APPEND_FUNC: &str = "@append";
 pub const REMOVE_FUNC: &str = "@remove";

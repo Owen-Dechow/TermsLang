@@ -1,9 +1,9 @@
 pub mod syntax;
 pub mod tokens;
 
-use crate::errors::{FileLocation, LexerError};
-
 use std::collections::HashMap;
+
+use crate::errors::{FileLocation, LexerError};
 
 use self::{
     syntax::{
@@ -95,6 +95,25 @@ fn handel_char(
 
             // Check for number
             if c.is_numeric() {
+                if let Some(Token(
+                    TokenType::Operator(Operator::Subtract),
+                    FileLocation::Loc {
+                        end_line,
+                        end_col,
+                        start_line,
+                        start_col,
+                    },
+                )) = result.last()
+                {
+                    if *end_line == positioning.start_line && *end_col == positioning.start_col {
+                        section.content.push('-');
+                        positioning.start_col = *start_col;
+                        positioning.start_line = *start_line;
+
+                        result.pop().unwrap();
+                    }
+                }
+
                 section.state = SectionState::Int;
                 section.content.push(c);
                 return Ok(());

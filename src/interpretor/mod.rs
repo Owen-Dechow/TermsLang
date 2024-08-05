@@ -1,8 +1,10 @@
 mod garbage_collector;
 mod internal_funcs;
 mod syntax;
+mod var_registry;
 
 use internal_funcs::{self as infn};
+use var_registry::VariableRegistry;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -53,6 +55,7 @@ impl RootObject {
 struct StructObject {
     _type: u32,
     fields: HashMap<String, u32>,
+    self_key: u32,
 }
 
 #[derive(Debug, Clone)]
@@ -96,7 +99,7 @@ impl DataObject {
                     }
                 };
 
-                return func_def.call(args, gc);
+                return func_def.struct_call(args, gc, struct_object.self_key);
             }
             DataObject::RootObject(root) => match method.as_str() {
                 syn::ADD_FUNC => {
@@ -143,7 +146,7 @@ impl DataObject {
 
                 syn::EQUAL_FUNC => infn::equal(root, gc, &args),
                 syn::TO_STRING_FUNC => infn::to_string(root, gc),
-                syn::TO_INT_FUNC => todo!(),
+                syn::TO_INT_FUNC => infn::to_int(root, gc),
                 syn::TO_FLOAT_FUNC => todo!(),
                 _ => {
                     return Err(RuntimeError(
@@ -231,8 +234,34 @@ struct FuncDef {
     block: FuncBlock,
 }
 impl FuncDef {
-    fn call(&self, args: Vec<u32>, gc: &mut GarbageCollector) -> Result<ExitMethod, RuntimeError> {
+    fn global_call(
+        &self,
+        args: Vec<u32>,
+        gc: &mut GarbageCollector,
+    ) -> Result<ExitMethod, RuntimeError> {
         let mut vr = gc.new_function_scope();
+        self.call(args, gc, &mut vr)
+    }
+
+    fn struct_call(
+        &self,
+        args: Vec<u32>,
+        gc: &mut GarbageCollector,
+        _struct: u32,
+    ) -> Result<ExitMethod, RuntimeError> {
+        let mut vr = gc.new_function_scope();
+        vr.vars.insert(syn::STRUCT_SELF.to_owned(), _struct);
+        let mut vr = vr.create_child();
+
+        self.call(args, gc, &mut vr)
+    }
+
+    fn call(
+        &self,
+        args: Vec<u32>,
+        gc: &mut GarbageCollector,
+        vr: &mut VariableRegistry,
+    ) -> Result<ExitMethod, RuntimeError> {
         if args.len() != self.args.len() {
             return Err(RuntimeError(
                 format!("Function call to {} has invalid arguments.", self.name),
@@ -302,56 +331,6 @@ struct DataCase {
     data: DataObject,
 }
 
-#[derive(Debug, Clone)]
-struct VariableRegistry {
-    vars: HashMap<String, u32>,
-    parent: Option<Box<VariableRegistry>>,
-}
-impl VariableRegistry {
-    fn resolve_string(&self, string: &String) -> Result<u32, RuntimeError> {
-        match self.vars.get(string) {
-            Some(resolved) => Ok(*resolved),
-            None => match &self.parent {
-                Some(parent) => parent.resolve_string(string),
-                None => Err(RuntimeError(
-                    format!("{} is not defined", string),
-                    crate::errors::FileLocation::None,
-                )),
-            },
-        }
-    }
-
-    fn release(self, gc: &mut GarbageCollector) {
-        for (_var, ref_id) in self.vars {
-            let data_case = gc.objects.get_mut(&ref_id).unwrap();
-            data_case.ref_count -= 1;
-            if data_case.ref_count == 0 {
-                gc.objects.remove(&ref_id);
-            }
-        }
-    }
-    fn release_exclude(self, gc: &mut GarbageCollector, key: &u32) {
-        for (_var, ref_id) in self.vars {
-            let data_case = gc.objects.get_mut(&ref_id).unwrap();
-            data_case.ref_count -= 1;
-            if data_case.ref_count == 0 && ref_id != *key {
-                gc.objects.remove(&ref_id);
-            }
-        }
-    }
-
-    fn create_child(&self) -> VariableRegistry {
-        VariableRegistry {
-            vars: HashMap::new(),
-            parent: Some(Box::new(self.clone())),
-        }
-    }
-
-    fn add_var(&mut self, name: &String, data_ref: u32) {
-        self.vars.insert(name.clone(), data_ref);
-    }
-}
-
 #[derive(Debug, PartialEq)]
 enum ExitMethod {
     ImplicitNullReturn,
@@ -416,6 +395,15 @@ fn interpret_operand_expression(
             }
         }
         OperandExpression::Create(create) => gc.create_object(create, vr),
+        OperandExpression::Dot { left, right } => {
+            let parent = interpret_operand_expression(&left, gc, vr)?;
+            let obj = gc.resolve_sub_object(parent, None, right, vr)?;
+            if obj == gc.root_type_map[&RootType::Null] {
+                return Ok(gc.create_null_object());
+            } else {
+                return Ok(obj);
+            }
+        }
     };
 
     return result;
@@ -490,7 +478,29 @@ fn run_term_block(
                         gc.objects.get_mut(&key).unwrap().data = gc.objects[&value].data.clone();
                         gc.release(value);
                     }
-                    _ => todo!(),
+                    _ => {
+                        let value = interpret_operand_expression(value, gc, &vr)?;
+                        let object = &mut gc.objects[&key].data.clone();
+                        let function = match set_operator {
+                            Operator::SetAdd => syn::ADD_FUNC,
+                            Operator::SetSubtract => syn::SUBTRACT_FUNC,
+                            Operator::SetMultiply => syn::MULTIPLY_FUNC,
+                            Operator::SetDivide => syn::DIVIDE_FUNC,
+                            Operator::SetModulo => syn::MODULO_FUNC,
+                            Operator::SetExponent => syn::EXPONENT_FUNC,
+                            _ => todo!(),
+                        };
+
+                        let value = object.call_method(gc, &function.to_owned(), vec![value])?;
+                        match value {
+                            ExitMethod::ExplicitReturn(val) => {
+                                gc.objects.get_mut(&key).unwrap().data =
+                                    gc.objects[&val].data.clone();
+                                gc.release(val);
+                            }
+                            _ => todo!(),
+                        }
+                    }
                 }
             }
             Term::If {
@@ -623,7 +633,7 @@ pub fn interpret(program: Program) -> Result<(), RuntimeError> {
         Some(main_id) => match gc.global_methods.get(main_id) {
             Some(func) => {
                 let func = func.clone();
-                func.call(vec![gc.command_line_args], &mut gc)
+                func.global_call(vec![gc.command_line_args], &mut gc)
             }
             None => Err(RuntimeError(
                 format!("{} must be a function.", syn::PROGRAM_ENTRY),

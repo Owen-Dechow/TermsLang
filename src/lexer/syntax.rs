@@ -7,7 +7,7 @@ pub const DECIMAL: char = '.';
 pub const VARIABLE_ALLOWED_EXTRA_CHARS: &str = "@_";
 pub const COMMENT: char = '#';
 pub const NEW_LINE: char = '\n';
-pub const LINE_TERMINATOR: char = ';';
+pub const LINE_TERMINATOR: char = '~';
 pub const STRING_QUOTES: &str = "\"'`";
 pub const IGNORED_IN_NUMBERS: &str = "_";
 

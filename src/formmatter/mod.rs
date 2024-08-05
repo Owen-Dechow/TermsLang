@@ -55,14 +55,15 @@ pub fn format(program: &String, indent_size: usize) -> String {
                         ignore = Ignore::String(ch);
                         program_text.push(ch);
                     }
-                    ' ' => {
+                    ' ' | '\t' => {
                         if !program_text.ends_with(' ') {
                             program_text.push(ch);
                         }
                     }
-                    ';' => {
+                    '~' => {
                         program_text = program_text.trim_end().to_string();
-                        program_text.push(';');
+                        program_text.push(' ');
+                        program_text.push('~');
                         if ch_idx != line.len() - 1 {
                             program_text.push('\n');
                             program_text.push_str(&get_indent(&indent_level));

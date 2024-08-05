@@ -278,6 +278,40 @@ pub fn to_string(root: &RootObject, gc: &mut GarbageCollector) -> Result<ExitMet
     Ok(ExitMethod::ExplicitReturn(key))
 }
 
+pub fn to_int(root: &RootObject, gc: &mut GarbageCollector) -> Result<ExitMethod, RuntimeError> {
+    let int = match root {
+        RootObject::String(string) => match string.parse() {
+            Ok(int) => int,
+            Err(_) => {
+                return Err(RuntimeError(
+                    format!("Cannot convert string '{}' to int", string),
+                    FileLocation::None,
+                ))
+            }
+        },
+        RootObject::Int(int) => *int,
+        RootObject::Float(float) => float.floor() as i32,
+        RootObject::Bool(_bool) => {
+            if *_bool {
+                1
+            } else {
+                0
+            }
+        }
+        RootObject::Null => 0,
+    };
+
+    let key = random();
+    gc.objects.insert(
+        key,
+        DataCase {
+            ref_count: 0,
+            data: DataObject::RootObject(RootObject::Int(int)),
+        },
+    );
+    Ok(ExitMethod::ExplicitReturn(key))
+}
+
 pub fn multiply_roots(
     left: &RootObject,
     right: &RootObject,

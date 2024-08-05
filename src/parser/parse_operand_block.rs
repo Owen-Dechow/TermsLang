@@ -19,6 +19,10 @@ pub enum OperandExpression {
         left: Box<OperandExpression>,
         right: Box<OperandExpression>,
     },
+    Dot {
+        left: Box<OperandExpression>,
+        right: Object,
+    },
     Literal(Token),
     Object(Object),
     Create(ObjectCreate),
@@ -47,6 +51,7 @@ fn get_precedent_map() -> Vec<Vec<Operator>> {
         vec![Operator::Multiply, Operator::Divide, Operator::Modulo],
         vec![Operator::Exponent],
         vec![Operator::Not], // Uninary only
+        vec![Operator::Dot], // Uninary only
     ]
 }
 
@@ -141,7 +146,114 @@ fn parse_slice(
                 if let OperandComponent::Operand(ref operand_token) = operand_component {
                     if let Token(TokenType::Operator(operator), _) = operand_token {
                         if president_layer.contains(&operator) {
+                            // Dot operators
                             if president_idx == president_map.len() - 1 {
+                                let slice_end = if operand_component_idx > 0 {
+                                    operand_component_idx - 1
+                                } else {
+                                    return Err(ParserError(
+                                        "Expected parenthies to the left of dot".to_string(),
+                                        operand_token.1.clone(),
+                                    ));
+                                };
+
+                                let slice_start = {
+                                    let mut slice_start = slice_end;
+                                    let mut paren_depth = 1;
+
+                                    loop {
+                                        if slice_start > 0 {
+                                            slice_start -= 1
+                                        } else {
+                                            return Err(ParserError(
+                                                "Expected parenthies to the left of dot"
+                                                    .to_string(),
+                                                operand_token.1.clone(),
+                                            ));
+                                        };
+
+                                        let thing = slice
+                                            .get(slice_start..(slice_start + 1))
+                                            .unwrap()
+                                            .first()
+                                            .unwrap();
+                                        match thing {
+                                            OperandComponent::Operand(Token(
+                                                TokenType::Operator(Operator::CloseParen),
+                                                _,
+                                            )) => {
+                                                paren_depth += 1;
+                                            }
+                                            OperandComponent::Operand(Token(
+                                                TokenType::Operator(Operator::OpenParen),
+                                                _,
+                                            )) => {
+                                                paren_depth -= 1;
+                                                if paren_depth == 0 {
+                                                    break;
+                                                }
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+
+                                    slice_start
+                                };
+
+                                let left_slice = match slice.get(slice_start..slice_end + 1) {
+                                    Some(slice) => slice,
+                                    None => {
+                                        return Err(ParserError(
+                                            "Expected value right of uniary operator".to_string(),
+                                            operand_token.1.clone(),
+                                        ))
+                                    }
+                                }
+                                .to_vec();
+
+                                let right_object = match slice.get(slice_end + 2..) {
+                                    Some(some) => match some.len() {
+                                        1 => match &some[0] {
+                                            OperandComponent::Object(object) => object,
+                                            _ => {
+                                                return Err(ParserError(
+                                                    format!("Dot must be followed by object"),
+                                                    operand_token.1.clone(),
+                                                ))
+                                            }
+                                        },
+                                        _ => {
+                                            return Err(ParserError(
+                                                format!(
+                                                    "Cannot have multiple objects following dot"
+                                                ),
+                                                operand_token.1.clone(),
+                                            ));
+                                        }
+                                    },
+                                    None => {
+                                        return Err(ParserError(
+                                            format!("Expected object following dot"),
+                                            operand_token.1.clone(),
+                                        ))
+                                    }
+                                };
+
+                                if slice.len() == 0 {
+                                    return Err(ParserError(
+                                        "Expected value right of uniary operator".to_string(),
+                                        operand_token.1.clone(),
+                                    ));
+                                }
+
+                                return Ok(OperandExpression::Dot {
+                                    left: Box::new(parse_slice(left_slice, president_map)?),
+                                    right: right_object.clone(),
+                                });
+                            }
+
+                            // Unary operators
+                            if president_idx == president_map.len() - 2 {
                                 let slice = match slice.get(operand_component_idx + 1..) {
                                     Some(slice) => slice,
                                     None => {
@@ -219,8 +331,6 @@ fn parse_slice(
             }
         }
     }
-
-    println!("{slice:?}");
 
     return Err(ParserError(
         "Operand parse falls through".to_string(),

@@ -9,9 +9,9 @@ use crate::{
 };
 
 use super::{
-    interpret_operand_expression, syntax, ArrayObject, DataCase, DataObject, ExitMethod, FuncBlock,
-    FuncDef, RootFunc, RootObject, RootType, StructDef, StructObject, TypeResolve,
-    VariableRegistry,
+    interpret_operand_expression, syntax, var_registry::VariableRegistry, ArrayObject, DataCase,
+    DataObject, ExitMethod, FuncBlock, FuncDef, RootFunc, RootObject, RootType, StructDef,
+    StructObject, TypeResolve,
 };
 
 #[derive(Debug)]
@@ -37,7 +37,7 @@ impl GarbageCollector {
             command_line_args: random(),
         };
 
-        let common = vec![syntax::TO_STRING_FUNC];
+        let common = vec![syntax::TO_STRING_FUNC, syntax::TO_INT_FUNC];
         gc.add_root_type("int", RootType::Int, common.clone());
         gc.add_root_type("bool", RootType::Bool, common.clone());
         gc.add_root_type("float", RootType::Float, common.clone());
@@ -199,7 +199,7 @@ impl GarbageCollector {
                 let key = vr.resolve_string(id)?;
 
                 match &object.sub {
-                    Some(sub) => self.resolve_sub_object(key, &*sub, vr),
+                    Some(sub) => self.resolve_sub_object(key, None, &*sub, vr),
                     None => Ok(key),
                 }
             }
@@ -238,7 +238,9 @@ impl GarbageCollector {
                                 }?;
 
                                 match &sub.sub {
-                                    Some(sub) => self.resolve_sub_object(result, &*sub, vr),
+                                    Some(sub) => {
+                                        self.resolve_sub_object(result, Some(parent), &*sub, vr)
+                                    }
                                     None => Ok(result),
                                 }
                             }
@@ -297,7 +299,7 @@ impl GarbageCollector {
                         }?;
 
                         match &sub.sub {
-                            Some(sub) => self.resolve_sub_object(result, &*sub, vr),
+                            Some(sub) => self.resolve_sub_object(result, Some(parent), &*sub, vr),
                             None => Ok(result),
                         }
                     }
@@ -341,9 +343,10 @@ impl GarbageCollector {
         return key;
     }
 
-    fn resolve_sub_object(
+    pub fn resolve_sub_object(
         &mut self,
         parent: u32,
+        parent_parent: Option<u32>,
         object: &Object,
         vr: &VariableRegistry,
     ) -> Result<u32, RuntimeError> {
@@ -351,7 +354,7 @@ impl GarbageCollector {
             ObjectType::Identity(id) => match &self.objects[&parent].data {
                 DataObject::StructObject(struct_object) => match struct_object.fields.get(id) {
                     Some(key) => match &object.sub {
-                        Some(sub) => self.resolve_sub_object(*key, &*sub, vr),
+                        Some(sub) => self.resolve_sub_object(*key, Some(parent), &*sub, vr),
                         None => Ok(*key),
                     },
                     None => {
@@ -359,7 +362,9 @@ impl GarbageCollector {
                         if let StructDef::User { methods, .. } = struct_def {
                             match methods.get(id) {
                                 Some(func_def) => match &object.sub {
-                                    Some(sub) => self.resolve_sub_object(*func_def, &*sub, vr),
+                                    Some(sub) => {
+                                        self.resolve_sub_object(*func_def, Some(parent), &*sub, vr)
+                                    }
                                     None => Err(RuntimeError(
                                         format!(
                                             "Cannot reference function, {}, without calling",
@@ -396,7 +401,14 @@ impl GarbageCollector {
                         }
                         args
                     };
-                    let result = match func_def.call(args, self)? {
+
+                    let result = if let Some(struct_id) = parent_parent {
+                        func_def.struct_call(args, self, struct_id)?
+                    } else {
+                        func_def.global_call(args, self)?
+                    };
+
+                    let result = match result {
                         ExitMethod::ImplicitNullReturn => Ok(self.create_null_object()),
                         ExitMethod::ExplicitReturn(id) => Ok(id),
                         ExitMethod::LoopContinue => todo!(),
@@ -404,7 +416,7 @@ impl GarbageCollector {
                     }?;
 
                     match &object.sub {
-                        Some(sub) => self.resolve_sub_object(result, &*sub, vr),
+                        Some(sub) => self.resolve_sub_object(result, Some(parent), &*sub, vr),
                         None => Ok(result),
                     }
                 }
@@ -441,7 +453,7 @@ impl GarbageCollector {
                 };
 
                 match &object.sub {
-                    Some(sub) => self.resolve_sub_object(result, &*sub, vr),
+                    Some(sub) => self.resolve_sub_object(result, Some(parent), &*sub, vr),
                     None => Ok(result),
                 }
             }
@@ -483,10 +495,12 @@ impl GarbageCollector {
     pub fn create_object(
         &mut self,
         create: &ObjectCreate,
-        _vr: &VariableRegistry,
+        vr: &VariableRegistry,
     ) -> Result<u32, RuntimeError> {
         let key = random();
         let _type = self.resolve_type(&create.kind)?;
+        let mut new_func = None;
+
         let data = match _type {
             TypeResolve::Array(_arr) => {
                 if create.args.args.len() > 0 {
@@ -509,29 +523,50 @@ impl GarbageCollector {
                     }
                     StructDef::User {
                         properties,
-                        methods: _methods,
+                        methods,
                         name: _name,
                     } => {
                         let mut fields = HashMap::new();
-                        let key = random();
-                        self.objects.insert(
-                            key,
-                            DataCase {
-                                ref_count: 1,
-                                data: DataObject::RootObject(RootObject::Null),
-                            },
-                        );
+
                         for (property, _type) in properties {
-                            fields.insert(property.clone(), key);
+                            let null = self.create_null_object();
+                            self.objects.get_mut(&null).unwrap().ref_count += 1;
+                            fields.insert(property.clone(), null);
                         }
 
-                        DataObject::StructObject(StructObject { fields, _type: std })
+                        new_func = match methods.get(syntax::NEW_FUNC) {
+                            Some(s) => Some(*s),
+                            None => None,
+                        };
+
+                        DataObject::StructObject(StructObject {
+                            fields,
+                            _type: std,
+                            self_key: key,
+                        })
                     }
                 }
             }
         };
 
         self.objects.insert(key, DataCase { ref_count: 0, data });
+
+        if let Some(func_id) = new_func {
+            let func = self.global_methods[&func_id].clone();
+
+            let args = {
+                let mut args = Vec::new();
+
+                for arg in &create.args.args {
+                    let arg = interpret_operand_expression(&arg, self, vr)?;
+                    args.push(arg);
+                }
+
+                args
+            };
+
+            func.struct_call(args, self, key)?;
+        }
 
         return Ok(key);
     }
