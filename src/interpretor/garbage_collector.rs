@@ -44,7 +44,7 @@ impl GarbageCollector {
         gc.add_root_type("str", RootType::String, common.clone());
         gc.add_root_type("null", RootType::Null, common.clone());
 
-        gc.add_root_func("readln", RootFunc::ReadLn, Vec::new());
+        gc.add_root_func("@readln", RootFunc::ReadLn, Vec::new());
 
         let mut command_line_args = Vec::new();
         for arg in env::args() {

@@ -66,25 +66,25 @@ func int fib: int n {
 }
 
 func int @main: str[] args {
-    # # println fib.(20).@str.()~
-    # println amain.(args).@str.()~
+    println fib.(20).@str.() ~
+    println amain.(args).@str.() ~
 
-    # let int[] a = $() int[]~
-    # cll a.@append.("goat", "PIG", 34)~
-    # cll a.@append.("23", "PIG", 34)~
+    let int[] a = $() int[] ~
+    cll a.@append.("goat", "PIG", 34) ~
+    cll a.@append.("23", "PIG", 34) ~
 
-    # println a.@len.().@str.()~
-    # println a.[3].@str.()~
-    # println args.[1]~
+    println a.@len.().@str.() ~
+    println a.[3].@str.() ~
+    println args.[1] ~
 
-    # let MyCustomStruct a = $(1, 2) MyCustomStruct~
-    # println a.@str.()~
+    let MyCustomStruct a = $(1, 2) MyCustomStruct ~
+    println a.@str.() ~
 
-    # updt a.val2 = 1~
-    # updt a.val = "pig"~
+    updt a.val2 = 1 ~
+    updt a.val = "pig" ~
 
     println "How old are you?" ~
-    let str age = readln.() ~
+    let str age = @readln.() ~
 
-    println "This old goat is % years old!" % (age.@int.() -100).@str.() ~
+    println "This old goat is % years old!" % (age.@int.() - 100).@str.() ~
 }

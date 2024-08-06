@@ -1,7 +1,7 @@
 # TermsLang
 The terms programming language
 
-> Simple, Consise, Fast
+> Simple, Consise, ~~Fast~~
 
 ## Latest Version: `v0.0`
 
@@ -11,5 +11,5 @@ VSCode Support: https://github.com/Owen-Dechow/TermsVsCodeSupport
 ## Progress
 - [x] Main Lexer
 - [x] Main Parser
-- [ ] Main interpreter
+- [x] Main interpreter
 - [ ] Version 1.0
