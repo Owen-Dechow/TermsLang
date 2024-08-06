@@ -204,7 +204,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "terms"
+name = "termslang"
 version = "0.1.0"
 dependencies = [
  "clap",
