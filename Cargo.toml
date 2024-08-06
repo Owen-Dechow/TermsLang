@@ -2,6 +2,7 @@ workspace = { members = [] }
 [package]
 repository = "https://github.com/Owen-Dechow/TermsLang"
 license-file = "LICENSE.md"
+description = "The terms programming language."
 name = "termslang"
 version = "0.1.0"
 edition = "2021"
