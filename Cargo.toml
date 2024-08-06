@@ -1,5 +1,7 @@
 workspace = { members = [] }
 [package]
+repository = "https://github.com/Owen-Dechow/TermsLang"
+license-file = "LICENSE.md"
 name = "terms"
 version = "0.1.0"
 edition = "2021"
