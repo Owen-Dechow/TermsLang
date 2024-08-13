@@ -398,6 +398,7 @@ fn interpret_operand_expression(
         OperandExpression::Dot { left, right } => {
             let parent = interpret_operand_expression(&left, gc, vr)?;
             let obj = gc.resolve_sub_object(parent, None, right, vr)?;
+            gc.release(parent);
             if obj == gc.root_type_map[&RootType::Null] {
                 return Ok(gc.create_null_object());
             } else {
