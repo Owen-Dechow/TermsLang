@@ -1,0 +1,41 @@
+"
+My FizzBuzz Program
+Created Tue Aug 13, 2024
+"
+
+struct FizzBuzz {
+    let int iters ~
+
+    func null @new: int iters {
+        updt @this.iters = iters ~
+    }
+
+    func null run: str _3Word, str _5Word {
+        loop i: i < @this.iters {
+            let str result = "" ~
+
+            if i % 3 == 0 {
+                updt result += _3Word ;
+            } else if i % 5 == 0 {
+                updt result += _5Word ~
+            } else {
+                updt result = i.@str.() ~
+            }
+
+            println result ~
+        }
+    }
+
+    func str @str: {
+        return "FizzBuzz Object: % Iterations" % @this.iters.@str.() ~
+    }
+}
+
+func int @main: str[] args {
+    let FizzBuzz fizzBuzz = $(100) FizzBuzz ~
+    cll fizzBuzz.run.("Fizz", "Buzz") ~
+    
+    println "-" * 35 ~
+    println fizzBuzz.@str.() ~
+    return 0 ~
+}

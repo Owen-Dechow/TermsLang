@@ -30,31 +30,29 @@ macro_rules! prettify_macro {
                     let lines = &program.lines().collect::<Vec<&str>>()[line_range.0..line_range.1];
 
                     // Loop over lines and add them to message
-                    for (idx, line) in lines.iter().enumerate() {
-                        // Trim whitespace
-                        let start_len = line.len();
-                        let line = line.trim_start();
-                        let trimmed_len = start_len - line.len();
-
+                    for (line_idx, line) in lines.iter().enumerate() {                        
                         // Get he start position of the underline
-                        let start = if idx == 0 { start_col - 1 } else { 0 };
-
-                        // Get the range of the underline
-                        let mut range = if idx == (end_line - start_line) {
-                            end_col - start - 1
+                        let start = if line_idx == 0 {
+                            if start_col > &0 {start_col -1} else {*start_col}
                         } else {
-                            line.len() - start
+                            0 
                         };
-                        if range == 0 {
-                            range = 1;
-                        }
+                        
+                        // Get the range of the underline
+                        let range = {
+                            if (start_line + line_idx) == *end_line {
+                                end_col + 1
+                            } else {
+                                line.len() - start
+                            }
+                        };
 
                         // Create underline
                         let underline =
-                            format!("{}{}", " ".repeat(start - trimmed_len), "^".repeat(range));
+                            format!("{}{}", " ".repeat(if start > 0 {start} else {0}), "^".repeat(range));
 
                         // Update message to include new line
-                        msg += format!("\n\t{line}\n\t{underline}").as_str();
+                        msg += format!("\n{}\n{}", line, underline).as_str();
                     }
 
                     // Return pretty message
