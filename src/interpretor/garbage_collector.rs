@@ -1,6 +1,5 @@
-use std::{collections::HashMap, env};
-
 use rand::random;
+use std::{collections::HashMap, env, rc::Rc};
 
 use crate::{
     errors::{FileLocation, RuntimeError},
@@ -74,7 +73,7 @@ impl GarbageCollector {
     pub fn new_function_scope(&self) -> VariableRegistry {
         VariableRegistry {
             vars: HashMap::new(),
-            parent: Some(Box::new(self.root_var_registry.clone())),
+            parent: Some(Rc::new(self.root_var_registry.clone())),
         }
     }
 

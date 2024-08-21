@@ -1,11 +1,11 @@
 use super::garbage_collector::GarbageCollector;
 use crate::errors::RuntimeError;
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
 #[derive(Debug, Clone)]
 pub struct VariableRegistry {
     pub vars: HashMap<String, u32>,
-    pub parent: Option<Box<VariableRegistry>>,
+    pub parent: Option<Rc<VariableRegistry>>,
 }
 impl VariableRegistry {
     pub fn resolve_string(&self, string: &String) -> Result<u32, RuntimeError> {
@@ -43,7 +43,7 @@ impl VariableRegistry {
     pub fn create_child(&self) -> VariableRegistry {
         VariableRegistry {
             vars: HashMap::new(),
-            parent: Some(Box::new(self.clone())),
+            parent: Some(Rc::new(self.clone())),
         }
     }
 
