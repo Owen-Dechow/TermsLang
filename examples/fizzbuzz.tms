@@ -15,7 +15,7 @@ struct FizzBuzz {
             let str result = "" ~
 
             if i % 3 == 0 {
-                updt result += _3Word ;
+                updt result += _3Word ~
             } else if i % 5 == 0 {
                 updt result += _5Word ~
             } else {
