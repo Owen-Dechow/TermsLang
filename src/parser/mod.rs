@@ -1,6 +1,11 @@
+use std::{fs, path::PathBuf};
+
 use crate::{
-    errors::{FileLocation, ParserError},
-    lexer::tokens::{KeyWord, Operator, Token, TokenType},
+    errors::{FileLocation, LexerError, ParserError},
+    lexer::{
+        self,
+        tokens::{KeyWord, Operator, Token, TokenType},
+    },
 };
 
 use self::{
@@ -144,6 +149,11 @@ pub enum Term {
     Call {
         value: OperandExpression,
     },
+}
+
+pub enum ErrType {
+    Parser(ParserError),
+    Lexer(LexerError),
 }
 
 // Parse single term
@@ -657,7 +667,7 @@ fn parse_block(token_stream: &mut TokenStream) -> Result<TermBlock, ParserError>
     }
 }
 
-fn parse_program(token_stream: &mut TokenStream) -> Result<Program, ParserError> {
+fn parse_program(token_stream: &mut TokenStream, path: &PathBuf) -> Result<Program, ErrType> {
     let mut program = Program {
         structs: Vec::new(),
         functions: Vec::new(),
@@ -666,20 +676,89 @@ fn parse_program(token_stream: &mut TokenStream) -> Result<Program, ParserError>
     while let Some(token) = token_stream.advance().cloned() {
         match token.0 {
             TokenType::KeyWord(keyword) => match keyword {
-                KeyWord::Struct => program.structs.push(parse_struct(token_stream)?),
-                KeyWord::Func => program.functions.push(parse_func(token_stream)?),
+                KeyWord::Struct => program.structs.push(match parse_struct(token_stream) {
+                    Ok(ok) => ok,
+                    Err(err) => return Err(ErrType::Parser(err)),
+                }),
+                KeyWord::Func => program.functions.push(match parse_func(token_stream) {
+                    Ok(ok) => ok,
+                    Err(err) => return Err(ErrType::Parser(err)),
+                }),
+                KeyWord::Import => {
+                    let file_token = match token_stream.advance() {
+                        Some(t) => t,
+                        None => {
+                            return Err(ErrType::Parser(ParserError(
+                                "Expected string after import.".to_string(),
+                                FileLocation::End,
+                            )))
+                        }
+                    }
+                    .clone();
+                    let file = match file_token {
+                        Token(TokenType::String(file), _) => file.to_owned(),
+                        _ => {
+                            return Err(ErrType::Parser(ParserError(
+                                "Expected string after import.".to_string(),
+                                file_token.1.clone(),
+                            )))
+                        }
+                    };
+
+                    let path = path.parent().unwrap().join(PathBuf::from(file));
+                    println!("{path:?}");
+                    match token_stream.advance() {
+                        Some(Token(TokenType::Terminate, _)) => {}
+                        Some(t) => {
+                            return Err(ErrType::Parser(ParserError(
+                                "Expected line terminator".to_string(),
+                                t.1.clone(),
+                            )))
+                        }
+                        None => {
+                            return Err(ErrType::Parser(ParserError(
+                                "Expected line terminator".to_string(),
+                                FileLocation::End,
+                            )))
+                        }
+                    }
+
+                    let module = {
+                        let mut module = match fs::read_to_string(&path) {
+                            Ok(ok) => ok,
+                            Err(_) => {
+                                return Err(ErrType::Parser(ParserError(
+                                    "Cannot read mod input file".to_string(),
+                                    file_token.1.clone(),
+                                )))
+                            }
+                        };
+                        module.push(' ');
+                        module
+                    };
+                    let lex_out = match lexer::lex(&module, false) {
+                        Ok(ok) => ok,
+                        Err(err) => return Err(ErrType::Lexer(err)),
+                    };
+                    let mut parse_out = parse(lex_out, &path)?;
+
+                    println!("{:?}", token_stream.current());
+
+                    program.structs.append(&mut parse_out.structs);
+                    program.functions.append(&mut parse_out.functions);
+                }
                 _ => {
-                    return Err(ParserError(
+                    return Err(ErrType::Parser(ParserError(
                         format!("Invalid keyword, {}, in program namespace", keyword),
                         token.1,
-                    ))
+                    )))
                 }
             },
             _ => {
-                return Err(ParserError(
+                return Err(ErrType::Parser(ParserError(
                     format!("Invalid token, {}, in program namespace", token.0),
                     token.1,
-                ))
+                )))
             }
         }
     }
@@ -688,7 +767,7 @@ fn parse_program(token_stream: &mut TokenStream) -> Result<Program, ParserError>
 }
 
 // Parse a Token Vector
-pub fn parse(input: Vec<Token>) -> Result<Program, ParserError> {
+pub fn parse(input: Vec<Token>, path: &PathBuf) -> Result<Program, ErrType> {
     let mut token_stream = TokenStream::new(input);
     let _program_prelude = match token_stream.current() {
         Some(Token(TokenType::String(string), _)) => string,
@@ -709,17 +788,17 @@ pub fn parse(input: Vec<Token>) -> Result<Program, ParserError> {
                     end_col,
                 }
             }
-            return Err(ParserError(
+            return Err(ErrType::Parser(ParserError(
                 "No program prelude string found".to_string(),
                 loc,
-            ));
+            )));
         }
         None => {
-            return Err(ParserError(
+            return Err(ErrType::Parser(ParserError(
                 "Program file empty".to_string(),
                 FileLocation::None,
-            ))
+            )))
         }
     };
-    return parse_program(&mut token_stream);
+    return parse_program(&mut token_stream, path);
 }

@@ -32,10 +32,13 @@ fn main() {
         };
 
         // Parse lex
-        let parse_out = match parser::parse(lex_out) {
+        let parse_out = match parser::parse(lex_out, &args.file) {
             Ok(parse) => parse,
             Err(err) => {
-                println!("{}", err.prettify(&program));
+                match err {
+                    parser::ErrType::Parser(err) => println!("{}", err.prettify(&program)),
+                    parser::ErrType::Lexer(err) => println!("{}", err.prettify(&program)),
+                };
                 return;
             }
         };

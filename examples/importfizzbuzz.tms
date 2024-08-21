@@ -1,0 +1,15 @@
+"
+My Import FizzBuzz Program
+Created Tue Aug 21, 2024
+"
+
+import "fizzBuzz.tms" ~
+
+func int @main: str[] args {
+    let FizzBuzz fizzBuzz = $(100) FizzBuzz ~
+    cll fizzBuzz.run.("Fizz", "Buzz") ~
+    
+    println "-" * 35 ~
+    println fizzBuzz.@str.() ~
+    return 0 ~
+}

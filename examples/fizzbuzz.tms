@@ -13,6 +13,7 @@ struct FizzBuzz {
     func null run: str _3Word, str _5Word {
         loop i: i < @this.iters {
             let str result = "" ~
+            let int i = i + 1 ~
 
             if i % 3 == 0 {
                 updt result += _3Word ~
