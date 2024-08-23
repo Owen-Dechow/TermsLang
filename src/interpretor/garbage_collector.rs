@@ -1,5 +1,5 @@
 use rand::random;
-use std::{collections::HashMap, env, rc::Rc};
+use std::{collections::HashMap, env};
 
 use crate::{
     errors::{FileLocation, RuntimeError},
@@ -15,7 +15,6 @@ use super::{
 
 #[derive(Debug)]
 pub struct GarbageCollector {
-    pub root_var_registry: VariableRegistry,
     pub objects: HashMap<u32, DataCase>,
     pub global_structs: HashMap<u32, StructDef>,
     pub global_methods: HashMap<u32, FuncDef>,
@@ -23,12 +22,8 @@ pub struct GarbageCollector {
     pub command_line_args: u32,
 }
 impl GarbageCollector {
-    pub fn new() -> GarbageCollector {
+    pub fn new(root_vr: &mut VariableRegistry) -> GarbageCollector {
         let mut gc = GarbageCollector {
-            root_var_registry: VariableRegistry {
-                vars: HashMap::new(),
-                parent: None,
-            },
             objects: HashMap::new(),
             global_structs: HashMap::new(),
             global_methods: HashMap::new(),
@@ -36,14 +31,38 @@ impl GarbageCollector {
             command_line_args: random(),
         };
 
-        let common = vec![syntax::TO_STRING_FUNC, syntax::TO_INT_FUNC];
-        gc.add_root_type("int", RootType::Int, common.clone());
-        gc.add_root_type("bool", RootType::Bool, common.clone());
-        gc.add_root_type("float", RootType::Float, common.clone());
-        gc.add_root_type("str", RootType::String, common.clone());
-        gc.add_root_type("null", RootType::Null, common.clone());
+        gc.add_root_type(
+            "int",
+            RootType::Int,
+            vec![syntax::TO_STRING_FUNC, syntax::TO_INT_FUNC],
+            root_vr,
+        );
+        gc.add_root_type(
+            "bool",
+            RootType::Bool,
+            vec![syntax::TO_STRING_FUNC, syntax::TO_INT_FUNC],
+            root_vr,
+        );
+        gc.add_root_type(
+            "float",
+            RootType::Float,
+            vec![syntax::TO_STRING_FUNC, syntax::TO_INT_FUNC],
+            root_vr,
+        );
+        gc.add_root_type(
+            "str",
+            RootType::String,
+            vec![syntax::TO_STRING_FUNC, syntax::TO_INT_FUNC],
+            root_vr,
+        );
+        gc.add_root_type(
+            "null",
+            RootType::Null,
+            vec![syntax::TO_STRING_FUNC, syntax::TO_INT_FUNC],
+            root_vr,
+        );
 
-        gc.add_root_func("@readln", RootFunc::ReadLn, Vec::new());
+        gc.add_root_func("@readln", RootFunc::ReadLn, Vec::new(), root_vr);
 
         let mut command_line_args = Vec::new();
         for arg in env::args() {
@@ -70,14 +89,13 @@ impl GarbageCollector {
         return gc;
     }
 
-    pub fn new_function_scope(&self) -> VariableRegistry {
-        VariableRegistry {
-            vars: HashMap::new(),
-            parent: Some(Rc::new(self.root_var_registry.clone())),
-        }
-    }
-
-    fn add_root_type(&mut self, name: &str, root_type: RootType, methods: Vec<&str>) {
+    fn add_root_type(
+        &mut self,
+        name: &str,
+        root_type: RootType,
+        methods: Vec<&str>,
+        root_vr: &mut VariableRegistry,
+    ) {
         let key = random();
         self.global_structs.insert(
             key,
@@ -87,11 +105,17 @@ impl GarbageCollector {
                 methods: methods.into_iter().map(|x| x.to_string()).collect(),
             },
         );
-        self.root_var_registry.vars.insert(name.to_string(), key);
+        root_vr.vars.insert(name.to_string(), key);
         self.root_type_map.insert(root_type, key);
     }
 
-    fn add_root_func(&mut self, name: &str, func: RootFunc, args: Vec<(String, TypeResolve)>) {
+    fn add_root_func(
+        &mut self,
+        name: &str,
+        func: RootFunc,
+        args: Vec<(String, TypeResolve)>,
+        root_vr: &mut VariableRegistry,
+    ) {
         let func_def = FuncDef {
             name: name.to_string(),
             args,
@@ -100,13 +124,20 @@ impl GarbageCollector {
 
         let key = random();
         self.global_methods.insert(key, func_def);
-        self.root_var_registry.vars.insert(name.to_string(), key);
+        root_vr.vars.insert(name.to_string(), key);
     }
 
-    pub fn add_struct(&mut self, _struct: Struct) -> Result<(), RuntimeError> {
+    pub fn add_struct(
+        &mut self,
+        _struct: Struct,
+        root_vr: &mut VariableRegistry,
+    ) -> Result<(), RuntimeError> {
         let mut properties = HashMap::new();
         for property in _struct.properties {
-            properties.insert(property.identity, self.resolve_type(&property.argtype)?);
+            properties.insert(
+                property.identity,
+                self.resolve_type(&property.argtype, root_vr)?,
+            );
         }
 
         let mut methods = HashMap::new();
@@ -114,7 +145,7 @@ impl GarbageCollector {
             let args = {
                 let mut args = Vec::new();
                 for arg in method.args {
-                    args.push((arg.identity, self.resolve_type(&arg.argtype)?));
+                    args.push((arg.identity, self.resolve_type(&arg.argtype, root_vr)?));
                 }
                 args
             };
@@ -140,16 +171,20 @@ impl GarbageCollector {
 
         let key = random();
         self.global_structs.insert(key, struct_def);
-        self.root_var_registry.vars.insert(_struct.name, key);
+        root_vr.vars.insert(_struct.name, key);
 
         return Ok(());
     }
 
-    pub fn add_function(&mut self, func: Function) -> Result<(), RuntimeError> {
+    pub fn add_function(
+        &mut self,
+        func: Function,
+        root_vr: &mut VariableRegistry,
+    ) -> Result<(), RuntimeError> {
         let args = {
             let mut args = Vec::new();
             for arg in func.args {
-                args.push((arg.identity, self.resolve_type(&arg.argtype)?));
+                args.push((arg.identity, self.resolve_type(&arg.argtype, root_vr)?));
             }
             args
         };
@@ -163,22 +198,26 @@ impl GarbageCollector {
 
         let key = random();
         self.global_methods.insert(key, func_def);
-        self.root_var_registry.vars.insert(func.name, key);
+        root_vr.vars.insert(func.name, key);
         return Ok(());
     }
 
-    fn resolve_type(&self, _type: &Type) -> Result<TypeResolve, RuntimeError> {
+    fn resolve_type(
+        &self,
+        _type: &Type,
+        root_vr: &VariableRegistry,
+    ) -> Result<TypeResolve, RuntimeError> {
         match _type {
-            Type::Array(_type) => Ok(TypeResolve::Array(Box::new(self.resolve_type(&*_type)?))),
+            Type::Array(_type) => Ok(TypeResolve::Array(Box::new(
+                self.resolve_type(&*_type, root_vr)?,
+            ))),
             Type::Object { object } => match &object.kind {
                 ObjectType::Identity(id) => match object.sub {
                     Some(_) => Err(RuntimeError(
                         "Expected type".to_string(),
                         FileLocation::None,
                     )),
-                    None => Ok(TypeResolve::Standard(
-                        self.root_var_registry.resolve_string(id)?,
-                    )),
+                    None => Ok(TypeResolve::Standard(root_vr.resolve_string(id)?)),
                 },
                 _ => Err(RuntimeError(
                     "Expected type".to_string(),
@@ -192,13 +231,14 @@ impl GarbageCollector {
         &mut self,
         object: &Object,
         vr: &VariableRegistry,
+        root_vr: &VariableRegistry,
     ) -> Result<u32, RuntimeError> {
         match &object.kind {
             ObjectType::Identity(id) => {
                 let key = vr.resolve_string(id)?;
 
                 match &object.sub {
-                    Some(sub) => self.resolve_sub_object(key, None, &*sub, vr),
+                    Some(sub) => self.resolve_sub_object(key, None, &*sub, vr, root_vr),
                     None => Ok(key),
                 }
             }
@@ -213,6 +253,7 @@ impl GarbageCollector {
         id: &String,
         parent: u32,
         vr: &VariableRegistry,
+        root_vr: &VariableRegistry,
     ) -> Result<u32, RuntimeError> {
         match root_def {
             StructDef::User { .. } => todo!(),
@@ -225,21 +266,28 @@ impl GarbageCollector {
                                 let args = {
                                     let mut args = Vec::new();
                                     for arg in &call.args {
-                                        args.push(interpret_operand_expression(&arg, self, vr)?)
+                                        args.push(interpret_operand_expression(
+                                            &arg, self, vr, root_vr,
+                                        )?)
                                     }
                                     args
                                 };
-                                let result = match data_object.call_method(self, id, args)? {
-                                    ExitMethod::ImplicitNullReturn => todo!(),
-                                    ExitMethod::ExplicitReturn(id) => Ok(id),
-                                    ExitMethod::LoopContinue => todo!(),
-                                    ExitMethod::LoopBreak => todo!(),
-                                }?;
+                                let result =
+                                    match data_object.call_method(self, id, args, root_vr)? {
+                                        ExitMethod::ImplicitNullReturn => todo!(),
+                                        ExitMethod::ExplicitReturn(id) => Ok(id),
+                                        ExitMethod::LoopContinue => todo!(),
+                                        ExitMethod::LoopBreak => todo!(),
+                                    }?;
 
                                 match &sub.sub {
-                                    Some(sub) => {
-                                        self.resolve_sub_object(result, Some(parent), &*sub, vr)
-                                    }
+                                    Some(sub) => self.resolve_sub_object(
+                                        result,
+                                        Some(parent),
+                                        &*sub,
+                                        vr,
+                                        root_vr,
+                                    ),
                                     None => Ok(result),
                                 }
                             }
@@ -277,6 +325,7 @@ impl GarbageCollector {
         id: &String,
         parent: u32,
         vr: &VariableRegistry,
+        root_vr: &VariableRegistry,
     ) -> Result<u32, RuntimeError> {
         if syntax::ARRAY_METHODS.contains(&id.as_str()) {
             match &object.sub {
@@ -285,7 +334,7 @@ impl GarbageCollector {
                         let args = {
                             let mut args = Vec::new();
                             for arg in &call.args {
-                                args.push(interpret_operand_expression(&arg, self, vr)?)
+                                args.push(interpret_operand_expression(&arg, self, vr, root_vr)?)
                             }
                             args
                         };
@@ -298,7 +347,9 @@ impl GarbageCollector {
                         }?;
 
                         match &sub.sub {
-                            Some(sub) => self.resolve_sub_object(result, Some(parent), &*sub, vr),
+                            Some(sub) => {
+                                self.resolve_sub_object(result, Some(parent), &*sub, vr, root_vr)
+                            }
                             None => Ok(result),
                         }
                     }
@@ -348,12 +399,15 @@ impl GarbageCollector {
         parent_parent: Option<u32>,
         object: &Object,
         vr: &VariableRegistry,
+        root_vr: &VariableRegistry,
     ) -> Result<u32, RuntimeError> {
         match &object.kind {
             ObjectType::Identity(id) => match &self.objects[&parent].data {
                 DataObject::StructObject(struct_object) => match struct_object.fields.get(id) {
                     Some(key) => match &object.sub {
-                        Some(sub) => self.resolve_sub_object(*key, Some(parent), &*sub, vr),
+                        Some(sub) => {
+                            self.resolve_sub_object(*key, Some(parent), &*sub, vr, root_vr)
+                        }
                         None => Ok(*key),
                     },
                     None => {
@@ -361,9 +415,13 @@ impl GarbageCollector {
                         if let StructDef::User { methods, .. } = struct_def {
                             match methods.get(id) {
                                 Some(func_def) => match &object.sub {
-                                    Some(sub) => {
-                                        self.resolve_sub_object(*func_def, Some(parent), &*sub, vr)
-                                    }
+                                    Some(sub) => self.resolve_sub_object(
+                                        *func_def,
+                                        Some(parent),
+                                        &*sub,
+                                        vr,
+                                        root_vr,
+                                    ),
                                     None => Err(RuntimeError(
                                         format!(
                                             "Cannot reference function, {}, without calling",
@@ -386,9 +444,11 @@ impl GarbageCollector {
                 },
                 DataObject::RootObject(root_object) => {
                     let root_def = root_object.get_root_type_def(self);
-                    self.resolve_root_sub(root_def, object, id, parent, vr)
+                    self.resolve_root_sub(root_def, object, id, parent, vr, root_vr)
                 }
-                DataObject::ArrayObject(..) => self.reslove_array_sub(object, id, parent, vr),
+                DataObject::ArrayObject(..) => {
+                    self.reslove_array_sub(object, id, parent, vr, root_vr)
+                }
             },
             ObjectType::Call(call) => match self.global_methods.get(&parent) {
                 Some(func_def) => {
@@ -396,15 +456,15 @@ impl GarbageCollector {
                     let args = {
                         let mut args = Vec::new();
                         for arg in &call.args {
-                            args.push(interpret_operand_expression(&arg, self, vr)?)
+                            args.push(interpret_operand_expression(&arg, self, vr, root_vr)?)
                         }
                         args
                     };
 
                     let result = if let Some(struct_id) = parent_parent {
-                        func_def.struct_call(args, self, struct_id)?
+                        func_def.struct_call(args, self, struct_id, root_vr)?
                     } else {
-                        func_def.global_call(args, self)?
+                        func_def.global_call(args, self, root_vr)?
                     };
 
                     let result = match result {
@@ -415,7 +475,9 @@ impl GarbageCollector {
                     }?;
 
                     match &object.sub {
-                        Some(sub) => self.resolve_sub_object(result, Some(parent), &*sub, vr),
+                        Some(sub) => {
+                            self.resolve_sub_object(result, Some(parent), &*sub, vr, root_vr)
+                        }
                         None => Ok(result),
                     }
                 }
@@ -425,7 +487,7 @@ impl GarbageCollector {
                 )),
             },
             ObjectType::Index(idx) => {
-                let args = vec![interpret_operand_expression(idx, self, vr)?];
+                let args = vec![interpret_operand_expression(idx, self, vr, root_vr)?];
 
                 let parent_obj = &mut self.objects.get_mut(&parent).unwrap().data;
                 let result = match parent_obj {
@@ -452,7 +514,7 @@ impl GarbageCollector {
                 };
 
                 match &object.sub {
-                    Some(sub) => self.resolve_sub_object(result, Some(parent), &*sub, vr),
+                    Some(sub) => self.resolve_sub_object(result, Some(parent), &*sub, vr, root_vr),
                     None => Ok(result),
                 }
             }
@@ -495,9 +557,10 @@ impl GarbageCollector {
         &mut self,
         create: &ObjectCreate,
         vr: &VariableRegistry,
+        root_vr: &VariableRegistry,
     ) -> Result<u32, RuntimeError> {
         let key = random();
-        let _type = self.resolve_type(&create.kind)?;
+        let _type = self.resolve_type(&create.kind, root_vr)?;
         let mut new_func = None;
 
         let data = match _type {
@@ -557,14 +620,14 @@ impl GarbageCollector {
                 let mut args = Vec::new();
 
                 for arg in &create.args.args {
-                    let arg = interpret_operand_expression(&arg, self, vr)?;
+                    let arg = interpret_operand_expression(&arg, self, vr, root_vr)?;
                     args.push(arg);
                 }
 
                 args
             };
 
-            func.struct_call(args, self, key)?;
+            func.struct_call(args, self, key, root_vr)?;
         }
 
         return Ok(key);
