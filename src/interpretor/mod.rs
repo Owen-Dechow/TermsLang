@@ -9,6 +9,7 @@ use var_registry::VariableRegistry;
 use std::{
     collections::{HashMap, HashSet},
     iter::zip,
+    rc::Rc,
 };
 use syntax::{self as syn};
 
@@ -39,7 +40,7 @@ enum RootObject {
     Null,
 }
 impl RootObject {
-    fn get_root_type_def(&self, gc: &GarbageCollector) -> StructDef {
+    fn get_root_type_def(&self, gc: &GarbageCollector) -> Rc<StructDef> {
         gc.global_structs[&gc.root_type_map[&match self {
             RootObject::String(_) => RootType::String,
             RootObject::Int(_) => RootType::Int,
@@ -154,9 +155,9 @@ impl DataObject {
                         format!(
                             "No function {} found for root type {}",
                             method,
-                            match root.get_root_type_def(gc) {
-                                StructDef::User { name, .. } => name,
-                                StructDef::Root { name, .. } => name,
+                            match *root.get_root_type_def(gc) {
+                                StructDef::User { ref name, .. } => name,
+                                StructDef::Root { ref name, .. } => name,
                             }
                         ),
                         FileLocation::None,

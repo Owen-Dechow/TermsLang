@@ -32,12 +32,12 @@ macro_rules! invalid_right_hand_side_root {
         Err(RuntimeError(
             format!(
                 "Invalid right hand side type, {}, when {} is on left hand side.",
-                if let StructDef::Root { name, .. } = $right.get_root_type_def($gc) {
+                if let StructDef::Root { ref name, .. } = *$right.get_root_type_def($gc) {
                     name
                 } else {
                     todo!()
                 },
-                if let StructDef::Root { name, .. } = $left.get_root_type_def($gc) {
+                if let StructDef::Root { ref name, .. } = *$left.get_root_type_def($gc) {
                     name
                 } else {
                     todo!()

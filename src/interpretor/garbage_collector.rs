@@ -1,5 +1,5 @@
 use rand::random;
-use std::{collections::HashMap, env};
+use std::{collections::HashMap, env, rc::Rc};
 
 use crate::{
     errors::{FileLocation, RuntimeError},
@@ -16,8 +16,8 @@ use super::{
 #[derive(Debug)]
 pub struct GarbageCollector {
     pub objects: HashMap<u32, DataCase>,
-    pub global_structs: HashMap<u32, StructDef>,
-    pub global_methods: HashMap<u32, FuncDef>,
+    pub global_structs: HashMap<u32, Rc<StructDef>>,
+    pub global_methods: HashMap<u32, Rc<FuncDef>>,
     pub root_type_map: HashMap<RootType, u32>,
     pub command_line_args: u32,
 }
@@ -103,7 +103,8 @@ impl GarbageCollector {
                 _type: root_type.clone(),
                 name: name.to_string(),
                 methods: methods.into_iter().map(|x| x.to_string()).collect(),
-            },
+            }
+            .into(),
         );
         root_vr.vars.insert(name.to_string(), key);
         self.root_type_map.insert(root_type, key);
@@ -123,7 +124,7 @@ impl GarbageCollector {
         };
 
         let key = random();
-        self.global_methods.insert(key, func_def);
+        self.global_methods.insert(key, func_def.into());
         root_vr.vars.insert(name.to_string(), key);
     }
 
@@ -158,7 +159,7 @@ impl GarbageCollector {
             };
 
             let key = random();
-            self.global_methods.insert(key, func_def);
+            self.global_methods.insert(key, func_def.into());
 
             methods.insert(method.name, key);
         }
@@ -170,7 +171,7 @@ impl GarbageCollector {
         };
 
         let key = random();
-        self.global_structs.insert(key, struct_def);
+        self.global_structs.insert(key, struct_def.into());
         root_vr.vars.insert(_struct.name, key);
 
         return Ok(());
@@ -197,7 +198,7 @@ impl GarbageCollector {
         };
 
         let key = random();
-        self.global_methods.insert(key, func_def);
+        self.global_methods.insert(key, func_def.into());
         root_vr.vars.insert(func.name, key);
         return Ok(());
     }
@@ -248,16 +249,20 @@ impl GarbageCollector {
 
     fn resolve_root_sub(
         &mut self,
-        root_def: StructDef,
+        root_def: Rc<StructDef>,
         object: &Object,
         id: &String,
         parent: u32,
         vr: &VariableRegistry,
         root_vr: &VariableRegistry,
     ) -> Result<u32, RuntimeError> {
-        match root_def {
+        match *root_def {
             StructDef::User { .. } => todo!(),
-            StructDef::Root { _type, methods, .. } => {
+            StructDef::Root {
+                ref _type,
+                ref methods,
+                ..
+            } => {
                 if methods.contains(id) {
                     match &object.sub {
                         Some(sub) => match &sub.kind {
@@ -412,7 +417,7 @@ impl GarbageCollector {
                     },
                     None => {
                         let struct_def = &self.global_structs[&struct_object._type];
-                        if let StructDef::User { methods, .. } = struct_def {
+                        if let StructDef::User { ref methods, .. } = **struct_def {
                             match methods.get(id) {
                                 Some(func_def) => match &object.sub {
                                     Some(sub) => self.resolve_sub_object(
