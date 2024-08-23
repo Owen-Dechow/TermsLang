@@ -1,0 +1,16 @@
+"
+Calculate Fib Program
+Created Fri Aug 23, 2024
+"
+
+func int fib: int n {
+    if n <= 1 {
+        return n ~
+    } else {
+        return fib.(n - 1) + fib.(n - 2) ~
+    }
+}
+
+func null @main: str[] args {
+    println fib.(25).@str.() ~
+}
