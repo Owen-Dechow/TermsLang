@@ -157,12 +157,16 @@ pub enum ErrType {
 }
 
 // Parse single term
-fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term, ParserError> {
+fn parse_term(
+    lead_token: Token,
+    token_stream: &mut TokenStream,
+    file: &PathBuf,
+) -> Result<Term, ParserError> {
     // Parse print
     if let Token(TokenType::KeyWord(KeyWord::Print), _) = lead_token {
         return Ok(Term::Print {
             ln: false,
-            operand_block: parse_operand_block(token_stream, vec![TokenType::Terminate])?,
+            operand_block: parse_operand_block(token_stream, vec![TokenType::Terminate], file)?,
         });
     }
 
@@ -170,13 +174,13 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
     if let Token(TokenType::KeyWord(KeyWord::PrintLn), _) = lead_token {
         return Ok(Term::Print {
             ln: true,
-            operand_block: parse_operand_block(token_stream, vec![TokenType::Terminate])?,
+            operand_block: parse_operand_block(token_stream, vec![TokenType::Terminate], file)?,
         });
     }
 
     // Parse var declaration
     if let Token(TokenType::KeyWord(KeyWord::Var), _) = lead_token {
-        let vartype = parse_type(token_stream)?;
+        let vartype = parse_type(token_stream, file)?;
         let name = match token_stream.advance().cloned() {
             Some(op) => match op.0 {
                 TokenType::Identity(id) => id,
@@ -190,7 +194,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             None => {
                 return Err(ParserError(
                     "Expected type variable name".to_string(),
-                    FileLocation::End,
+                    FileLocation::End { file: file.clone() },
                 ))
             }
         };
@@ -206,7 +210,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             None => todo!(),
         }
 
-        let value = parse_operand_block(token_stream, vec![TokenType::Terminate])?;
+        let value = parse_operand_block(token_stream, vec![TokenType::Terminate], file)?;
 
         return Ok(Term::DeclareVar {
             name: name.to_owned(),
@@ -218,13 +222,13 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
     // Parse return
     if let Token(TokenType::KeyWord(KeyWord::Return), _) = lead_token {
         return Ok(Term::Return {
-            value: parse_operand_block(token_stream, vec![TokenType::Terminate])?,
+            value: parse_operand_block(token_stream, vec![TokenType::Terminate], file)?,
         });
     }
 
     // Parse var update
     if let Token(TokenType::KeyWord(KeyWord::UpdateVar), _) = lead_token {
-        let var = parse_object_peekable(token_stream)?;
+        let var = parse_object_peekable(token_stream, file)?;
 
         let set_operator = match token_stream.advance() {
             Some(Token(TokenType::Operator(operator), pos)) => match operator {
@@ -251,13 +255,13 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             None => {
                 return Err(ParserError(
                     "Expected set operator or set operator variant".to_string(),
-                    FileLocation::End,
+                    FileLocation::End { file: file.clone() },
                 ))
             }
         }
         .clone();
 
-        let value = parse_operand_block(token_stream, vec![TokenType::Terminate])?;
+        let value = parse_operand_block(token_stream, vec![TokenType::Terminate], file)?;
 
         return Ok(Term::UpdateVar {
             var,
@@ -268,20 +272,23 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
 
     // Parse if block
     if let Token(TokenType::KeyWord(KeyWord::If), _) = lead_token {
-        let conditional =
-            parse_operand_block(token_stream, vec![TokenType::Operator(Operator::OpenBlock)])?;
+        let conditional = parse_operand_block(
+            token_stream,
+            vec![TokenType::Operator(Operator::OpenBlock)],
+            file,
+        )?;
         token_stream.back();
-        let block = parse_block(token_stream)?;
+        let block = parse_block(token_stream, file)?;
 
         let else_block = match token_stream.advance() {
             Some(Token(TokenType::KeyWord(KeyWord::Else), _)) => match token_stream.advance() {
                 Some(token) => match token {
                     Token(TokenType::KeyWord(KeyWord::If), _) => TermBlock {
-                        terms: vec![parse_term(token.clone(), token_stream)?],
+                        terms: vec![parse_term(token.clone(), token_stream, file)?],
                     },
                     Token(TokenType::Operator(Operator::OpenBlock), _) => {
                         token_stream.back();
-                        parse_block(token_stream)?
+                        parse_block(token_stream, file)?
                     }
                     _ => {
                         return Err(ParserError(
@@ -293,7 +300,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
                 None => {
                     return Err(ParserError(
                         "Expected else body".to_string(),
-                        FileLocation::End,
+                        FileLocation::End { file: file.clone() },
                     ))
                 }
             },
@@ -327,7 +334,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             None => {
                 return Err(ParserError(
                     "Expected loop counter name".to_string(),
-                    FileLocation::End,
+                    FileLocation::End { file: file.clone() },
                 ))
             }
         };
@@ -345,16 +352,19 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             None => {
                 return Err(ParserError(
                     "Premeture end to loop definition".to_string(),
-                    FileLocation::End,
+                    FileLocation::End { file: file.clone() },
                 ))
             }
         };
 
-        let conditional =
-            parse_operand_block(token_stream, vec![TokenType::Operator(Operator::OpenBlock)])?;
+        let conditional = parse_operand_block(
+            token_stream,
+            vec![TokenType::Operator(Operator::OpenBlock)],
+            file,
+        )?;
         token_stream.back();
 
-        let block = parse_block(token_stream)?;
+        let block = parse_block(token_stream, file)?;
 
         return Ok(Term::Loop {
             counter,
@@ -378,7 +388,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             None => {
                 return Err(ParserError(
                     "Expected line terminator".to_string(),
-                    FileLocation::End,
+                    FileLocation::End { file: file.clone() },
                 ))
             }
         };
@@ -399,7 +409,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
             None => {
                 return Err(ParserError(
                     "Expected line terminator".to_string(),
-                    FileLocation::End,
+                    FileLocation::End { file: file.clone() },
                 ))
             }
         };
@@ -408,7 +418,7 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
     // Parse call
     if let Token(TokenType::KeyWord(KeyWord::Call), _) = lead_token {
         return Ok(Term::Call {
-            value: parse_operand_block(token_stream, vec![TokenType::Terminate])?,
+            value: parse_operand_block(token_stream, vec![TokenType::Terminate], file)?,
         });
     }
 
@@ -419,9 +429,9 @@ fn parse_term(lead_token: Token, token_stream: &mut TokenStream) -> Result<Term,
 }
 
 // Parse function
-fn parse_func(token_stream: &mut TokenStream) -> Result<Function, ParserError> {
+fn parse_func(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Function, ParserError> {
     // Get return type of function
-    let returntype = parse_type::parse_type(token_stream)?;
+    let returntype = parse_type::parse_type(token_stream, file)?;
 
     // Get identity of function
     let name = match token_stream.advance().cloned() {
@@ -437,7 +447,7 @@ fn parse_func(token_stream: &mut TokenStream) -> Result<Function, ParserError> {
         None => {
             return Err(ParserError(
                 "Expected function name".to_string(),
-                FileLocation::End,
+                FileLocation::End { file: file.clone() },
             ))
         }
     };
@@ -454,7 +464,7 @@ fn parse_func(token_stream: &mut TokenStream) -> Result<Function, ParserError> {
         None => {
             return Err(ParserError(
                 "Premature end to function signiture".to_string(),
-                FileLocation::End,
+                FileLocation::End { file: file.clone() },
             ))
         }
     };
@@ -472,7 +482,7 @@ fn parse_func(token_stream: &mut TokenStream) -> Result<Function, ParserError> {
                 None => {
                     return Err(ParserError(
                         "Expected function body".to_string(),
-                        FileLocation::End,
+                        FileLocation::End { file: file.clone() },
                     ))
                 }
             };
@@ -485,7 +495,7 @@ fn parse_func(token_stream: &mut TokenStream) -> Result<Function, ParserError> {
             // Roll token stream back to start of arg declaration
             token_stream.back();
 
-            let var_sig = parse_type::parse_var_sig(token_stream)?;
+            let var_sig = parse_type::parse_var_sig(token_stream, file)?;
 
             // Parse argument and add to arg list
             args.push(var_sig.clone());
@@ -503,7 +513,7 @@ fn parse_func(token_stream: &mut TokenStream) -> Result<Function, ParserError> {
                 None => {
                     return Err(ParserError(
                         "Expected function body".to_string(),
-                        FileLocation::End,
+                        FileLocation::End { file: file.clone() },
                     ))
                 }
             }
@@ -517,7 +527,7 @@ fn parse_func(token_stream: &mut TokenStream) -> Result<Function, ParserError> {
     token_stream.back();
 
     // Get function block
-    let block = parse_block(token_stream)?;
+    let block = parse_block(token_stream, file)?;
 
     // Add function to term array
     return Ok(Function {
@@ -529,7 +539,7 @@ fn parse_func(token_stream: &mut TokenStream) -> Result<Function, ParserError> {
 }
 
 // Parse struct
-fn parse_struct(token_stream: &mut TokenStream) -> Result<Struct, ParserError> {
+fn parse_struct(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Struct, ParserError> {
     let name = match token_stream.advance().cloned() {
         Some(op) => match op.0 {
             TokenType::Identity(id) => id,
@@ -543,7 +553,7 @@ fn parse_struct(token_stream: &mut TokenStream) -> Result<Struct, ParserError> {
         None => {
             return Err(ParserError(
                 "Expected class name".to_string(),
-                FileLocation::End,
+                FileLocation::End { file: file.clone() },
             ))
         }
     };
@@ -560,7 +570,7 @@ fn parse_struct(token_stream: &mut TokenStream) -> Result<Struct, ParserError> {
         None => {
             return Err(ParserError(
                 "Premature end to class definition".to_string(),
-                FileLocation::End,
+                FileLocation::End { file: file.clone() },
             ))
         }
     };
@@ -577,7 +587,7 @@ fn parse_struct(token_stream: &mut TokenStream) -> Result<Struct, ParserError> {
         match token_stream.advance() {
             Some(token) => match token {
                 Token(TokenType::KeyWord(KeyWord::Var), _) => {
-                    let var_sig = parse_var_sig(token_stream)?;
+                    let var_sig = parse_var_sig(token_stream, file)?;
 
                     // Check for terminating char
                     match token_stream.advance() {
@@ -591,7 +601,7 @@ fn parse_struct(token_stream: &mut TokenStream) -> Result<Struct, ParserError> {
                         None => {
                             return Err(ParserError(
                                 "Expected line terminator".to_string(),
-                                FileLocation::End,
+                                FileLocation::End { file: file.clone() },
                             ))
                         }
                     };
@@ -599,7 +609,7 @@ fn parse_struct(token_stream: &mut TokenStream) -> Result<Struct, ParserError> {
                     properties.push(var_sig);
                 }
                 Token(TokenType::KeyWord(KeyWord::Func), _) => {
-                    let func = parse_func(token_stream)?;
+                    let func = parse_func(token_stream, file)?;
                     methods.push(func);
                 }
                 _ => {
@@ -612,7 +622,7 @@ fn parse_struct(token_stream: &mut TokenStream) -> Result<Struct, ParserError> {
             None => {
                 return Err(ParserError(
                     "Expected class block close".to_string(),
-                    FileLocation::End,
+                    FileLocation::End { file: file.clone() },
                 ))
             }
         }
@@ -626,14 +636,19 @@ fn parse_struct(token_stream: &mut TokenStream) -> Result<Struct, ParserError> {
 }
 
 // Parse code within block
-fn parse_block(token_stream: &mut TokenStream) -> Result<TermBlock, ParserError> {
+fn parse_block(token_stream: &mut TokenStream, file: &PathBuf) -> Result<TermBlock, ParserError> {
     // Check for block open
     let mut block = match token_stream.advance() {
         Some(Token(TokenType::Operator(Operator::OpenBlock), _)) => TermBlock {
             terms: Vec::<Term>::new(),
         },
         Some(token) => return Err(ParserError("Expected block".to_string(), token.1.clone())),
-        None => return Err(ParserError("Expected block".to_string(), FileLocation::End)),
+        None => {
+            return Err(ParserError(
+                "Expected block".to_string(),
+                FileLocation::End { file: file.clone() },
+            ))
+        }
     };
 
     let TermBlock { ref mut terms } = block;
@@ -646,7 +661,7 @@ fn parse_block(token_stream: &mut TokenStream) -> Result<TermBlock, ParserError>
         }
 
         // Parse term
-        let term = parse_term(token, token_stream)?;
+        let term = parse_term(token, token_stream, file)?;
         terms.push(term);
     }
 
@@ -661,13 +676,13 @@ fn parse_block(token_stream: &mut TokenStream) -> Result<TermBlock, ParserError>
         None => {
             return Err(ParserError(
                 "Expected block close".to_string(),
-                FileLocation::End,
+                FileLocation::End { file: file.clone() },
             ))
         }
     }
 }
 
-fn parse_program(token_stream: &mut TokenStream, path: &PathBuf) -> Result<Program, ErrType> {
+fn parse_program(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Program, ErrType> {
     let mut program = Program {
         structs: Vec::new(),
         functions: Vec::new(),
@@ -676,26 +691,30 @@ fn parse_program(token_stream: &mut TokenStream, path: &PathBuf) -> Result<Progr
     while let Some(token) = token_stream.advance().cloned() {
         match token.0 {
             TokenType::KeyWord(keyword) => match keyword {
-                KeyWord::Struct => program.structs.push(match parse_struct(token_stream) {
-                    Ok(ok) => ok,
-                    Err(err) => return Err(ErrType::Parser(err)),
-                }),
-                KeyWord::Func => program.functions.push(match parse_func(token_stream) {
-                    Ok(ok) => ok,
-                    Err(err) => return Err(ErrType::Parser(err)),
-                }),
+                KeyWord::Struct => program
+                    .structs
+                    .push(match parse_struct(token_stream, file) {
+                        Ok(ok) => ok,
+                        Err(err) => return Err(ErrType::Parser(err)),
+                    }),
+                KeyWord::Func => program
+                    .functions
+                    .push(match parse_func(token_stream, file) {
+                        Ok(ok) => ok,
+                        Err(err) => return Err(ErrType::Parser(err)),
+                    }),
                 KeyWord::Import => {
                     let file_token = match token_stream.advance() {
                         Some(t) => t,
                         None => {
                             return Err(ErrType::Parser(ParserError(
                                 "Expected string after import.".to_string(),
-                                FileLocation::End,
+                                FileLocation::End { file: file.clone() },
                             )))
                         }
                     }
                     .clone();
-                    let file = match file_token {
+                    let file_string = match file_token {
                         Token(TokenType::String(file), _) => file.to_owned(),
                         _ => {
                             return Err(ErrType::Parser(ParserError(
@@ -705,8 +724,7 @@ fn parse_program(token_stream: &mut TokenStream, path: &PathBuf) -> Result<Progr
                         }
                     };
 
-                    let path = path.parent().unwrap().join(PathBuf::from(file));
-                    println!("{path:?}");
+                    let path = file.parent().unwrap().join(PathBuf::from(file_string));
                     match token_stream.advance() {
                         Some(Token(TokenType::Terminate, _)) => {}
                         Some(t) => {
@@ -718,7 +736,7 @@ fn parse_program(token_stream: &mut TokenStream, path: &PathBuf) -> Result<Progr
                         None => {
                             return Err(ErrType::Parser(ParserError(
                                 "Expected line terminator".to_string(),
-                                FileLocation::End,
+                                FileLocation::End { file: file.clone() },
                             )))
                         }
                     }
@@ -736,13 +754,12 @@ fn parse_program(token_stream: &mut TokenStream, path: &PathBuf) -> Result<Progr
                         module.push(' ');
                         module
                     };
-                    let lex_out = match lexer::lex(&module, false) {
+                    let lex_out = match lexer::lex(&module, false, &path) {
                         Ok(ok) => ok,
                         Err(err) => return Err(ErrType::Lexer(err)),
                     };
                     let mut parse_out = parse(lex_out, &path)?;
 
-                    println!("{:?}", token_stream.current());
 
                     program.structs.append(&mut parse_out.structs);
                     program.functions.append(&mut parse_out.functions);
@@ -767,7 +784,7 @@ fn parse_program(token_stream: &mut TokenStream, path: &PathBuf) -> Result<Progr
 }
 
 // Parse a Token Vector
-pub fn parse(input: Vec<Token>, path: &PathBuf) -> Result<Program, ErrType> {
+pub fn parse(input: Vec<Token>, file: &PathBuf) -> Result<Program, ErrType> {
     let mut token_stream = TokenStream::new(input);
     let _program_prelude = match token_stream.current() {
         Some(Token(TokenType::String(string), _)) => string,
@@ -778,10 +795,12 @@ pub fn parse(input: Vec<Token>, path: &PathBuf) -> Result<Program, ErrType> {
                 end_line,
                 start_col,
                 mut end_col,
+                ..
             } = loc
             {
                 end_col = 1;
                 loc = FileLocation::Loc {
+                    file: file.clone(),
                     start_line,
                     end_line,
                     start_col,
@@ -800,5 +819,5 @@ pub fn parse(input: Vec<Token>, path: &PathBuf) -> Result<Program, ErrType> {
             )))
         }
     };
-    return parse_program(&mut token_stream, path);
+    return parse_program(&mut token_stream, file);
 }

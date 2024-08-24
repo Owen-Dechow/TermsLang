@@ -23,10 +23,10 @@ fn main() {
         fs::write(&args.file, text).expect("Cannot write to input file");
     } else {
         // Lex file
-        let lex_out = match lexer::lex(&program, false) {
+        let lex_out = match lexer::lex(&program, false, &args.file) {
             Ok(lex) => lex,
             Err(err) => {
-                println!("{}", err.prettify(&program));
+                println!("{}", err.prettify());
                 return;
             }
         };
@@ -36,8 +36,8 @@ fn main() {
             Ok(parse) => parse,
             Err(err) => {
                 match err {
-                    parser::ErrType::Parser(err) => println!("{}", err.prettify(&program)),
-                    parser::ErrType::Lexer(err) => println!("{}", err.prettify(&program)),
+                    parser::ErrType::Parser(err) => println!("{}", err.prettify()),
+                    parser::ErrType::Lexer(err) => println!("{}", err.prettify()),
                 };
                 return;
             }
@@ -47,7 +47,7 @@ fn main() {
         let _interpretor_out = match interpretor::interpret(parse_out) {
             Ok(intperpretation) => intperpretation,
             Err(err) => {
-                println!("{}", err.prettify(&program));
+                println!("{}", err.prettify());
                 return;
             }
         };

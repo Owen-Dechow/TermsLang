@@ -1,7 +1,7 @@
 macro_rules! prettify_macro {
     ($text:expr) => {
         // Convert to pretty SyntaxError
-        pub fn prettify(&self, program: &String) -> String {
+        pub fn prettify(&self) -> String {
             let file_location: &FileLocation = &self.1;
             let err_msg: &String = &self.0;
             let t: &str = $text;
@@ -10,18 +10,20 @@ macro_rules! prettify_macro {
             match file_location {
                 // File position attached
                 FileLocation::Loc {
+                    file,
                     start_line,
                     end_line,
                     start_col,
                     end_col,
                 } => {
+                    let program = fs::read_to_string(file).unwrap();
+
                     // Create initall mesage
                     let mut msg = format!(
-                        "{t} [pos: {}:{}-{}:{}] ({})",
+                        "{t} {}:{}:{} ({})",
+                        file.display(),
                         start_line + 1,
-                        start_col,
-                        end_line + 1,
-                        end_col,
+                        start_col + 1,
                         err_msg
                     );
 
@@ -30,14 +32,18 @@ macro_rules! prettify_macro {
                     let lines = &program.lines().collect::<Vec<&str>>()[line_range.0..line_range.1];
 
                     // Loop over lines and add them to message
-                    for (line_idx, line) in lines.iter().enumerate() {                        
+                    for (line_idx, line) in lines.iter().enumerate() {
                         // Get he start position of the underline
                         let start = if line_idx == 0 {
-                            if start_col > &0 {start_col -1} else {*start_col}
+                            if start_col > &0 {
+                                start_col - 1
+                            } else {
+                                *start_col
+                            }
                         } else {
-                            0 
+                            0
                         };
-                        
+
                         // Get the range of the underline
                         let range = {
                             if (start_line + line_idx) == *end_line {
@@ -48,8 +54,11 @@ macro_rules! prettify_macro {
                         };
 
                         // Create underline
-                        let underline =
-                            format!("{}{}", " ".repeat(if start > 0 {start} else {0}), "^".repeat(range));
+                        let underline = format!(
+                            "{}{}",
+                            " ".repeat(if start > 0 { start } else { 0 }),
+                            "^".repeat(range)
+                        );
 
                         // Update message to include new line
                         msg += format!("\n{}\n{}", line, underline).as_str();
@@ -59,9 +68,12 @@ macro_rules! prettify_macro {
                     return msg;
                 }
                 // End of file
-                FileLocation::End => {
+                FileLocation::End { file } => {
+
+                    let program = fs::read_to_string(file).unwrap();
+
                     // Get he initall message
-                    let mut msg = format!("{t} ({})", err_msg);
+                    let mut msg = format!("{t} {} ({})", file.display(), err_msg);
 
                     // Get the last line
                     let line = program.lines().last().unwrap().trim();

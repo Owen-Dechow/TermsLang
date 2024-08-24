@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{
     errors::{FileLocation, ParserError},
     lexer::tokens::{Operator, Token, TokenType},
@@ -6,7 +8,10 @@ use crate::{
 use super::{parse_object::parse_object_peekable, TokenStream, Type, VarSigniture};
 
 // Get types within <>
-pub fn get_associated_types(token_stream: &mut TokenStream) -> Result<Vec<Type>, ParserError> {
+pub fn get_associated_types(
+    token_stream: &mut TokenStream,
+    file: &PathBuf,
+) -> Result<Vec<Type>, ParserError> {
     // Create the type list
     let mut associated_types = Vec::<Type>::new();
 
@@ -19,7 +24,7 @@ pub fn get_associated_types(token_stream: &mut TokenStream) -> Result<Vec<Type>,
         }
 
         // Parse type
-        let associated_type = parse_type(token_stream)?;
+        let associated_type = parse_type(token_stream, file)?;
 
         // Add valid type to list
         associated_types.push(associated_type);
@@ -37,7 +42,7 @@ pub fn get_associated_types(token_stream: &mut TokenStream) -> Result<Vec<Type>,
             None => {
                 return Err(ParserError(
                     "Expected associated type list close".to_string(),
-                    FileLocation::End,
+                    FileLocation::End { file: file.clone() },
                 ))
             }
         }
@@ -48,9 +53,9 @@ pub fn get_associated_types(token_stream: &mut TokenStream) -> Result<Vec<Type>,
 }
 
 // Parse a type identifier
-pub fn parse_type(token_stream: &mut TokenStream) -> Result<Type, ParserError> {
+pub fn parse_type(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Type, ParserError> {
     // Get the typename token
-    let typename = parse_object_peekable(token_stream)?;
+    let typename = parse_object_peekable(token_stream, file)?;
 
     let mut _type = Type::Object { object: typename };
 
@@ -69,7 +74,7 @@ pub fn parse_type(token_stream: &mut TokenStream) -> Result<Type, ParserError> {
             None => {
                 return Err(ParserError(
                     "Expected closing bracket".to_string(),
-                    FileLocation::End,
+                    FileLocation::End { file: file.clone() },
                 ))
             }
         }
@@ -80,9 +85,12 @@ pub fn parse_type(token_stream: &mut TokenStream) -> Result<Type, ParserError> {
 }
 
 // Gen variable signiture: type<>[] name
-pub fn parse_var_sig(token_stream: &mut TokenStream) -> Result<VarSigniture, ParserError> {
+pub fn parse_var_sig(
+    token_stream: &mut TokenStream,
+    file: &PathBuf,
+) -> Result<VarSigniture, ParserError> {
     // Get the type of the argument
-    let argtype = parse_type(token_stream)?;
+    let argtype = parse_type(token_stream, file)?;
 
     // Get the name of the argument
     let name = match token_stream.advance() {
@@ -98,7 +106,7 @@ pub fn parse_var_sig(token_stream: &mut TokenStream) -> Result<VarSigniture, Par
         None => {
             return Err(ParserError(
                 "Expected variable name".to_string(),
-                FileLocation::End,
+                FileLocation::End { file: file.clone() },
             ))
         }
     };

@@ -1,7 +1,7 @@
 pub mod syntax;
 pub mod tokens;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 use crate::errors::{FileLocation, LexerError};
 
@@ -44,6 +44,7 @@ impl Section {
 }
 
 struct FileLocationModel {
+    file: PathBuf,
     start_line: usize,
     end_line: usize,
     start_col: usize,
@@ -52,6 +53,7 @@ struct FileLocationModel {
 impl FileLocationModel {
     fn build(&self) -> FileLocation {
         FileLocation::Loc {
+            file: self.file.clone(),
             start_line: self.start_line,
             end_line: self.end_line,
             start_col: self.start_col,
@@ -102,6 +104,7 @@ fn handel_char(
                         end_col,
                         start_line,
                         start_col,
+                        ..
                     },
                 )) = result.last()
                 {
@@ -315,7 +318,7 @@ fn handel_char(
 }
 
 // Lex a program (input)
-pub fn lex(input: &String, lex_comments: bool) -> Result<Vec<Token>, LexerError> {
+pub fn lex(input: &String, lex_comments: bool, file: &PathBuf) -> Result<Vec<Token>, LexerError> {
     // Create syntax map
     let syntax_map = get_syntax_map();
 
@@ -327,6 +330,7 @@ pub fn lex(input: &String, lex_comments: bool) -> Result<Vec<Token>, LexerError>
 
     // Create token position tracker
     let mut positioning = FileLocationModel {
+        file: file.clone(),
         start_line: 0,
         end_line: 0,
         start_col: 0,

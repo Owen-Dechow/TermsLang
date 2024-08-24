@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{
     errors::{FileLocation, ParserError},
     lexer::tokens::{Operator, Token, TokenType},
@@ -87,6 +89,7 @@ fn remove_extra_paren(slice: &mut Vec<OperandComponent>) {
 fn parse_slice(
     mut slice: Vec<OperandComponent>,
     president_map: &Vec<Vec<Operator>>,
+    file: &PathBuf,
 ) -> Result<OperandExpression, ParserError> {
     let mut paren_depth = 0;
 
@@ -247,7 +250,7 @@ fn parse_slice(
                                 }
 
                                 return Ok(OperandExpression::Dot {
-                                    left: Box::new(parse_slice(left_slice, president_map)?),
+                                    left: Box::new(parse_slice(left_slice, president_map, file)?),
                                     right: right_object.clone(),
                                 });
                             }
@@ -276,6 +279,7 @@ fn parse_slice(
                                     val: Box::new(parse_slice(
                                         slice.into_iter().cloned().collect(),
                                         president_map,
+                                        file,
                                     )?),
                                 });
                             }
@@ -319,10 +323,12 @@ fn parse_slice(
                                 left: Box::new(parse_slice(
                                     slice_l.into_iter().cloned().collect(),
                                     president_map,
+                                    file,
                                 )?),
                                 right: Box::new(parse_slice(
                                     slice_r.into_iter().cloned().collect(),
                                     president_map,
+                                    file,
                                 )?),
                             });
                         }
@@ -336,7 +342,7 @@ fn parse_slice(
         "Operand parse falls through".to_string(),
         match slice.last() {
             Some(OperandComponent::Operand(token)) => token.1.clone(),
-            _ => FileLocation::End,
+            _ => FileLocation::End { file: file.clone() },
         },
     ));
 }
@@ -344,6 +350,7 @@ fn parse_slice(
 pub fn parse_operand_block(
     token_stream: &mut TokenStream,
     terminating_tokens: Vec<TokenType>,
+    file: &PathBuf,
 ) -> Result<OperandExpression, ParserError> {
     let operand_list = {
         let mut operand_list = Vec::<OperandComponent>::new();
@@ -355,7 +362,7 @@ pub fn parse_operand_block(
                 None => {
                     return Err(ParserError(
                         "Expected end of operand block".to_string(),
-                        FileLocation::End,
+                        FileLocation::End { file: file.clone() },
                     ))
                 }
             };
@@ -393,11 +400,11 @@ pub fn parse_operand_block(
                 TokenType::Bool(_) => OperandComponent::Literal(token.clone()),
                 TokenType::Identity(_) => {
                     token_stream.back();
-                    OperandComponent::Object(parse_object_peekable_callable(token_stream)?)
+                    OperandComponent::Object(parse_object_peekable_callable(token_stream, file)?)
                 }
                 TokenType::Operator(Operator::New) => {
                     token_stream.back();
-                    OperandComponent::Create(parse_object_create(token_stream)?)
+                    OperandComponent::Create(parse_object_create(token_stream, file)?)
                 }
                 TokenType::Operator(_) => OperandComponent::Operand(token.clone()),
                 _ => {
@@ -414,5 +421,5 @@ pub fn parse_operand_block(
         operand_list
     };
 
-    return parse_slice(operand_list, &get_precedent_map());
+    return parse_slice(operand_list, &get_precedent_map(), file);
 }

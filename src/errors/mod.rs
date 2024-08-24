@@ -1,3 +1,6 @@
+use std::fs;
+use std::path::PathBuf;
+
 #[macro_use]
 mod macros;
 
@@ -37,11 +40,14 @@ impl ActiveParserError {
 #[derive(Debug, PartialEq, Clone)]
 pub enum FileLocation {
     Loc {
+        file: PathBuf,
         start_line: usize,
         end_line: usize,
         start_col: usize,
         end_col: usize,
     },
-    End,
+    End {
+        file: PathBuf,
+    },
     None,
 }
