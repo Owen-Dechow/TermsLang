@@ -1,0 +1,9 @@
+""
+
+struct MyStruct {
+}
+
+func null @main: str[] args {
+    let MyStruct a = $() int ~
+    cll a.[0] ~
+}

@@ -47,7 +47,11 @@ macro_rules! prettify_macro {
                         // Get the range of the underline
                         let range = {
                             if (start_line + line_idx) == *end_line {
-                                end_col + 1
+                                if end_col <= start_col {
+                                    1
+                                } else {
+                                    end_col - start_col
+                                }
                             } else {
                                 line.len() - start
                             }
@@ -69,7 +73,6 @@ macro_rules! prettify_macro {
                 }
                 // End of file
                 FileLocation::End { file } => {
-
                     let program = fs::read_to_string(file).unwrap();
 
                     // Get he initall message

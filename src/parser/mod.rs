@@ -52,12 +52,18 @@ pub enum Array {
 
 #[derive(Debug, Clone)]
 pub enum Type {
-    Array(Box<Type>),
-    Object { object: Object },
+    Array {
+        _type: Box<Type>,
+        location: FileLocation,
+    },
+    Object {
+        object: Object,
+    },
 }
 
 #[derive(Debug, Clone)]
 pub struct Object {
+    pub location: FileLocation,
     pub kind: ObjectType,
     pub sub: Option<Box<Object>>,
 }
@@ -759,7 +765,6 @@ fn parse_program(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Progr
                         Err(err) => return Err(ErrType::Lexer(err)),
                     };
                     let mut parse_out = parse(lex_out, &path)?;
-
 
                     program.structs.append(&mut parse_out.structs);
                     program.functions.append(&mut parse_out.functions);

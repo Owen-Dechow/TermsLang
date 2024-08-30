@@ -1,21 +1,25 @@
 use super::garbage_collector::GarbageCollector;
-use crate::errors::RuntimeError;
+use crate::errors::{FileLocation, RuntimeError};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct VariableRegistry<'a> {
     pub vars: HashMap<String, u32>,
     pub parent: Option<&'a VariableRegistry<'a>>,
 }
 impl VariableRegistry<'_> {
-    pub fn resolve_string(&self, string: &String) -> Result<u32, RuntimeError> {
+    pub fn resolve_string(
+        &self,
+        string: &String,
+        location: &FileLocation,
+    ) -> Result<u32, RuntimeError> {
         match self.vars.get(string) {
             Some(resolved) => Ok(*resolved),
             None => match &self.parent {
-                Some(parent) => parent.resolve_string(string),
+                Some(parent) => parent.resolve_string(string, location),
                 None => Err(RuntimeError(
                     format!("{} is not defined", string),
-                    crate::errors::FileLocation::None,
+                    location.clone(),
                 )),
             },
         }

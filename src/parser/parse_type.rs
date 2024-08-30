@@ -56,14 +56,17 @@ pub fn get_associated_types(
 pub fn parse_type(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Type, ParserError> {
     // Get the typename token
     let typename = parse_object_peekable(token_stream, file)?;
-
+    let location = typename.location.clone();
     let mut _type = Type::Object { object: typename };
 
     // Wrap matrix
     while let Some(Token(TokenType::Operator(Operator::OpenBracket), _)) = token_stream.advance() {
         match token_stream.advance() {
             Some(Token(TokenType::Operator(Operator::CloseBracket), _)) => {
-                _type = Type::Array(Box::new(_type));
+                _type = Type::Array {
+                    _type: Box::new(_type),
+                    location: location.clone(),
+                };
             }
             Some(token) => {
                 return Err(ParserError(

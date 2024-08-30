@@ -299,7 +299,7 @@ impl FuncDef {
         }
 
         let result = match &self.block {
-            FuncBlock::User(term_block) => run_term_block(term_block, gc, &vr, root_vr)?,
+            FuncBlock::User(term_block) => run_term_block(term_block, gc, vr, root_vr)?,
             FuncBlock::Root(root) => root.call(gc, &vr)?,
         };
 
@@ -326,8 +326,8 @@ impl FuncDef {
 
 #[derive(Debug, Clone)]
 enum TypeResolve {
-    Array(Box<TypeResolve>),
-    Standard(u32),
+    Array(Box<TypeResolve>, FileLocation),
+    Standard(u32, FileLocation),
 }
 
 #[derive(Debug)]
@@ -347,7 +347,7 @@ enum ExitMethod {
 fn interpret_operand_expression(
     operand_expression: &OperandExpression,
     gc: &mut GarbageCollector,
-    vr: &VariableRegistry,
+    vr: &mut VariableRegistry,
     root_vr: &VariableRegistry,
 ) -> Result<u32, RuntimeError> {
     let result = match operand_expression {
@@ -420,14 +420,14 @@ fn interpret_operand_expression(
 fn run_term_block(
     block: &TermBlock,
     gc: &mut GarbageCollector,
-    vr: &VariableRegistry,
+    vr: &mut VariableRegistry,
     root_vr: &VariableRegistry,
 ) -> Result<ExitMethod, RuntimeError> {
     let mut vr = vr.create_child();
     for term in &block.terms {
         match term {
             Term::Print { ln, operand_block } => {
-                let value = interpret_operand_expression(operand_block, gc, &vr, root_vr)?;
+                let value = interpret_operand_expression(operand_block, gc, &mut vr, root_vr)?;
                 let output = match gc.objects.get(&value) {
                     Some(DataCase {
                         data: DataObject::RootObject(RootObject::String(string)),
@@ -448,7 +448,7 @@ fn run_term_block(
                 gc.release(value);
             }
             Term::DeclareVar { name, value, .. } => {
-                let key = interpret_operand_expression(value, gc, &vr, root_vr)?;
+                let key = interpret_operand_expression(value, gc, &mut vr, root_vr)?;
                 vr.vars.insert(name.clone(), key);
                 match gc.objects.get_mut(&key) {
                     Some(datacase) => datacase.ref_count += 1,
@@ -470,7 +470,7 @@ fn run_term_block(
                 }
             }
             Term::Return { value } => {
-                let result = interpret_operand_expression(value, gc, &vr, root_vr)?;
+                let result = interpret_operand_expression(value, gc, &mut vr, root_vr)?;
                 vr.release(gc);
 
                 return Ok(ExitMethod::ExplicitReturn(result));
@@ -480,15 +480,15 @@ fn run_term_block(
                 set_operator,
                 value,
             } => {
-                let key = gc.resolve_object(var, &vr, root_vr)?;
+                let key = gc.resolve_object(var, &mut vr, root_vr)?;
                 match set_operator {
                     Operator::Set => {
-                        let value = interpret_operand_expression(value, gc, &vr, root_vr)?;
+                        let value = interpret_operand_expression(value, gc, &mut vr, root_vr)?;
                         gc.objects.get_mut(&key).unwrap().data = gc.objects[&value].data.clone();
                         gc.release(value);
                     }
                     _ => {
-                        let value = interpret_operand_expression(value, gc, &vr, root_vr)?;
+                        let value = interpret_operand_expression(value, gc, &mut vr, root_vr)?;
                         let object = &mut gc.objects[&key].data.clone();
                         let function = match set_operator {
                             Operator::SetAdd => syn::ADD_FUNC,
@@ -518,7 +518,8 @@ fn run_term_block(
                 block,
                 else_block,
             } => {
-                let operand_result = interpret_operand_expression(conditional, gc, &vr, root_vr)?;
+                let operand_result =
+                    interpret_operand_expression(conditional, gc, &mut vr, root_vr)?;
                 let result = *match gc.objects.get(&operand_result) {
                     Some(DataCase {
                         data: DataObject::RootObject(RootObject::Bool(_bool)),
@@ -533,13 +534,13 @@ fn run_term_block(
                 };
                 gc.release(operand_result);
                 if result {
-                    let output = run_term_block(block, gc, &vr, root_vr)?;
+                    let output = run_term_block(block, gc, &mut vr, root_vr)?;
 
                     if output != ExitMethod::ImplicitNullReturn {
                         return Ok(output);
                     }
                 } else {
-                    let output = run_term_block(else_block, gc, &vr, root_vr)?;
+                    let output = run_term_block(else_block, gc, &mut vr, root_vr)?;
 
                     if output != ExitMethod::ImplicitNullReturn {
                         return Ok(output);
@@ -558,7 +559,8 @@ fn run_term_block(
                 gc.objects.insert(key, data_case);
                 vr.add_var(counter, key);
 
-                let operand_result = interpret_operand_expression(conditional, gc, &vr, root_vr)?;
+                let operand_result =
+                    interpret_operand_expression(conditional, gc, &mut vr, root_vr)?;
                 let mut conditional_result = match gc.objects.get(&operand_result) {
                     Some(DataCase {
                         data: DataObject::RootObject(RootObject::Bool(_bool)),
@@ -573,7 +575,7 @@ fn run_term_block(
                 };
                 gc.release(operand_result);
                 while conditional_result {
-                    let result = run_term_block(block, gc, &vr, root_vr)?;
+                    let result = run_term_block(block, gc, &mut vr, root_vr)?;
                     match result {
                         ExitMethod::ExplicitReturn(result) => {
                             return Ok(ExitMethod::ExplicitReturn(result))
@@ -589,7 +591,7 @@ fn run_term_block(
                             }
 
                             let operand_result =
-                                interpret_operand_expression(conditional, gc, &vr, root_vr)?;
+                                interpret_operand_expression(conditional, gc, &mut vr, root_vr)?;
                             conditional_result = match gc.objects.get(&operand_result) {
                                 Some(DataCase {
                                     data: DataObject::RootObject(RootObject::Bool(_bool)),
@@ -618,7 +620,7 @@ fn run_term_block(
                 return Ok(ExitMethod::LoopContinue);
             }
             Term::Call { value } => {
-                let result = interpret_operand_expression(value, gc, &vr, root_vr)?;
+                let result = interpret_operand_expression(value, gc, &mut vr, root_vr)?;
                 gc.release(result);
             }
         };

@@ -31,9 +31,9 @@ impl RuntimeError {
     prettify_macro! {"Runtime Error"}
 }
 
-pub struct ActiveParserError(pub String, pub FileLocation);
-from_for_err_macro! {ActiveParserError}
-impl ActiveParserError {
+pub struct AParserError(pub String, pub FileLocation);
+from_for_err_macro! {AParserError}
+impl AParserError {
     prettify_macro! {"Active Parser Error"}
 }
 

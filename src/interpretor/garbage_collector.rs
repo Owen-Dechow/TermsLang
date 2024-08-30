@@ -2,7 +2,7 @@ use rand::random;
 use std::{collections::HashMap, env, rc::Rc};
 
 use crate::{
-    errors::{FileLocation, RuntimeError},
+    errors::RuntimeError,
     lexer::tokens::{Token, TokenType},
     parser::{Function, Object, ObjectCreate, ObjectType, Struct, Type},
 };
@@ -209,20 +209,24 @@ impl GarbageCollector {
         root_vr: &VariableRegistry,
     ) -> Result<TypeResolve, RuntimeError> {
         match _type {
-            Type::Array(_type) => Ok(TypeResolve::Array(Box::new(
-                self.resolve_type(&*_type, root_vr)?,
-            ))),
+            Type::Array { _type, location } => Ok(TypeResolve::Array(
+                Box::new(self.resolve_type(&*_type, root_vr)?),
+                location.clone(),
+            )),
             Type::Object { object } => match &object.kind {
                 ObjectType::Identity(id) => match object.sub {
                     Some(_) => Err(RuntimeError(
                         "Expected type".to_string(),
-                        FileLocation::None,
+                        object.location.clone(),
                     )),
-                    None => Ok(TypeResolve::Standard(root_vr.resolve_string(id)?)),
+                    None => Ok(TypeResolve::Standard(
+                        root_vr.resolve_string(id, &object.location)?,
+                        object.location.clone(),
+                    )),
                 },
                 _ => Err(RuntimeError(
                     "Expected type".to_string(),
-                    FileLocation::None,
+                    object.location.clone(),
                 )),
             },
         }
@@ -231,12 +235,12 @@ impl GarbageCollector {
     pub fn resolve_object(
         &mut self,
         object: &Object,
-        vr: &VariableRegistry,
+        vr: &mut VariableRegistry,
         root_vr: &VariableRegistry,
     ) -> Result<u32, RuntimeError> {
         match &object.kind {
             ObjectType::Identity(id) => {
-                let key = vr.resolve_string(id)?;
+                let key = vr.resolve_string(id, &object.location)?;
 
                 match &object.sub {
                     Some(sub) => self.resolve_sub_object(key, None, &*sub, vr, root_vr),
@@ -253,7 +257,7 @@ impl GarbageCollector {
         object: &Object,
         id: &String,
         parent: u32,
-        vr: &VariableRegistry,
+        vr: &mut VariableRegistry,
         root_vr: &VariableRegistry,
     ) -> Result<u32, RuntimeError> {
         match *root_def {
@@ -302,7 +306,7 @@ impl GarbageCollector {
                                     "Root type functions must be called; alias creation,",
                                     " indexing, and object peeking is not allowed."
                                 ),
-                                FileLocation::None,
+                                object.location.clone(),
                             )),
                         },
                         None => Err(RuntimeError(
@@ -311,13 +315,13 @@ impl GarbageCollector {
                                 "Root type functions must be called; alias creation,",
                                 " indexing, and object peeking is not allowed."
                             ),
-                            FileLocation::None,
+                            object.location.clone(),
                         )),
                     }
                 } else {
                     Err(RuntimeError(
                         format!("{} no field or method found on struct", id),
-                        FileLocation::None,
+                        object.location.clone(),
                     ))
                 }
             }
@@ -329,7 +333,7 @@ impl GarbageCollector {
         object: &Object,
         id: &String,
         parent: u32,
-        vr: &VariableRegistry,
+        vr: &mut VariableRegistry,
         root_vr: &VariableRegistry,
     ) -> Result<u32, RuntimeError> {
         if syntax::ARRAY_METHODS.contains(&id.as_str()) {
@@ -364,7 +368,7 @@ impl GarbageCollector {
                             "Array type functions must be called; alias creation, indexing,",
                             " and object peeking is not allowed."
                         ),
-                        FileLocation::None,
+                        object.location.clone(),
                     )),
                 },
                 None => Err(RuntimeError(
@@ -373,13 +377,13 @@ impl GarbageCollector {
                         "Array type functions must be called; alias creation, indexing,",
                         " and object peeking is not allowed."
                     ),
-                    FileLocation::None,
+                    object.location.clone(),
                 )),
             }
         } else {
             Err(RuntimeError(
                 format!("{} no field or method found on array", id),
-                FileLocation::None,
+                object.location.clone(),
             ))
         }
     }
@@ -403,7 +407,7 @@ impl GarbageCollector {
         parent: u32,
         parent_parent: Option<u32>,
         object: &Object,
-        vr: &VariableRegistry,
+        vr: &mut VariableRegistry,
         root_vr: &VariableRegistry,
     ) -> Result<u32, RuntimeError> {
         match &object.kind {
@@ -432,13 +436,13 @@ impl GarbageCollector {
                                             "Cannot reference function, {}, without calling",
                                             id
                                         ),
-                                        FileLocation::None,
+                                        object.location.clone(),
                                     )),
                                 },
                                 None => {
                                     return Err(RuntimeError(
                                         format!("No field or method {} on struct", id),
-                                        FileLocation::None,
+                                        object.location.clone(),
                                     ))
                                 }
                             }
@@ -488,7 +492,7 @@ impl GarbageCollector {
                 }
                 None => Err(RuntimeError(
                     "Object is not a function".to_string(),
-                    FileLocation::None,
+                    object.location.clone(),
                 )),
             },
             ObjectType::Index(idx) => {
@@ -496,13 +500,32 @@ impl GarbageCollector {
 
                 let parent_obj = &mut self.objects.get_mut(&parent).unwrap().data;
                 let result = match parent_obj {
-                    DataObject::StructObject(..) => {
-                        todo!()
+                    DataObject::StructObject(_struct) => {
+                        match _struct.fields.get(syntax::INDEX_FUNC) {
+                            Some(obj) => match self
+                                .global_methods
+                                .get(obj)
+                                .unwrap()
+                                .clone()
+                                .call(args, self, vr, root_vr)?
+                            {
+                                ExitMethod::ImplicitNullReturn => self.create_null_object(),
+                                ExitMethod::ExplicitReturn(result) => result,
+                                ExitMethod::LoopContinue => todo!(),
+                                ExitMethod::LoopBreak => todo!(),
+                            },
+                            None => {
+                                return Err(RuntimeError(
+                                    format!("struct has no function {}", syntax::INDEX_FUNC),
+                                    object.location.clone(),
+                                ))
+                            }
+                        }
                     }
                     DataObject::RootObject(..) => {
                         return Err(RuntimeError(
                             "Cannot index into root object".to_string(),
-                            FileLocation::None,
+                            object.location.clone(),
                         ))
                     }
                     DataObject::ArrayObject(..) => match DataObject::call_array_func(
@@ -512,10 +535,10 @@ impl GarbageCollector {
                         args,
                     )? {
                         ExitMethod::ImplicitNullReturn => todo!(),
-                        ExitMethod::ExplicitReturn(id) => Ok(id),
+                        ExitMethod::ExplicitReturn(id) => id,
                         ExitMethod::LoopContinue => todo!(),
                         ExitMethod::LoopBreak => todo!(),
-                    }?,
+                    },
                 };
 
                 match &object.sub {
@@ -561,7 +584,7 @@ impl GarbageCollector {
     pub fn create_object(
         &mut self,
         create: &ObjectCreate,
-        vr: &VariableRegistry,
+        vr: &mut VariableRegistry,
         root_vr: &VariableRegistry,
     ) -> Result<u32, RuntimeError> {
         let key = random();
@@ -569,23 +592,23 @@ impl GarbageCollector {
         let mut new_func = None;
 
         let data = match _type {
-            TypeResolve::Array(_arr) => {
+            TypeResolve::Array(_arr, location) => {
                 if create.args.args.len() > 0 {
                     return Err(RuntimeError(
                         "Cannot have args in array creation.".to_string(),
-                        FileLocation::None,
+                        location,
                     ));
                 }
 
                 DataObject::ArrayObject(ArrayObject(Vec::new()))
             }
-            TypeResolve::Standard(std) => {
+            TypeResolve::Standard(std, loc) => {
                 let struct_def = self.get_struct_def_from_id(std)?.clone();
                 match struct_def {
                     StructDef::Root { .. } => {
                         return Err(RuntimeError(
                             "Cannot directly construct root type".to_string(),
-                            FileLocation::None,
+                            loc.clone(),
                         ));
                     }
                     StructDef::User {
