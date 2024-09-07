@@ -14,13 +14,20 @@ use std::{
 use syntax::{self as syn};
 
 use garbage_collector::GarbageCollector;
-use rand::random;
 
 use crate::{
     errors::{FileLocation, RuntimeError},
     lexer::tokens::{Operator, TokenType},
     parser::{parse_operand_block::OperandExpression, Program, Term, TermBlock},
 };
+
+struct Counter(u32);
+impl Counter {
+    pub fn new_key(&mut self) -> u32 {
+        self.0 += 1;
+        self.0
+    }
+}
 
 #[derive(Clone, Eq, Hash, PartialEq, Debug)]
 enum RootType {
@@ -75,6 +82,7 @@ impl DataObject {
         method: &String,
         args: Vec<u32>,
         root_vr: &VariableRegistry,
+        counter: &mut Counter,
     ) -> Result<ExitMethod, RuntimeError> {
         let result = match self {
             DataObject::StructObject(struct_object) => {
@@ -101,54 +109,90 @@ impl DataObject {
                     }
                 };
 
-                return func_def.struct_call(args, gc, struct_object.self_key, root_vr);
+                return func_def.struct_call(args, gc, struct_object.self_key, root_vr, counter);
             }
             DataObject::RootObject(root) => match method.as_str() {
                 syn::ADD_FUNC => {
-                    infn::std_binary_operation(root, gc, &args, method, &infn::add_roots)
+                    infn::std_binary_operation(root, gc, &args, method, &infn::add_roots, counter)
                 }
 
-                syn::SUBTRACT_FUNC => {
-                    infn::std_binary_operation(root, gc, &args, &method, &infn::subtract_roots)
-                }
-                syn::MULTIPLY_FUNC => {
-                    infn::std_binary_operation(root, gc, &args, &method, &infn::multiply_roots)
-                }
-                syn::DIVIDE_FUNC => {
-                    infn::std_binary_operation(root, gc, &args, &method, &infn::divide_roots)
-                }
-                syn::MODULO_FUNC => {
-                    infn::std_binary_operation(root, gc, &args, &method, &infn::modulo_roots)
-                }
-                syn::EXPONENT_FUNC => {
-                    infn::std_binary_operation(root, gc, &args, &method, &infn::exponent_roots)
-                }
-                syn::GREATER_FUNC => {
-                    infn::std_binary_operation(root, gc, &args, &method, &infn::greater_roots)
-                }
+                syn::SUBTRACT_FUNC => infn::std_binary_operation(
+                    root,
+                    gc,
+                    &args,
+                    &method,
+                    &infn::subtract_roots,
+                    counter,
+                ),
+                syn::MULTIPLY_FUNC => infn::std_binary_operation(
+                    root,
+                    gc,
+                    &args,
+                    &method,
+                    &infn::multiply_roots,
+                    counter,
+                ),
+                syn::DIVIDE_FUNC => infn::std_binary_operation(
+                    root,
+                    gc,
+                    &args,
+                    &method,
+                    &infn::divide_roots,
+                    counter,
+                ),
+                syn::MODULO_FUNC => infn::std_binary_operation(
+                    root,
+                    gc,
+                    &args,
+                    &method,
+                    &infn::modulo_roots,
+                    counter,
+                ),
+                syn::EXPONENT_FUNC => infn::std_binary_operation(
+                    root,
+                    gc,
+                    &args,
+                    &method,
+                    &infn::exponent_roots,
+                    counter,
+                ),
+                syn::GREATER_FUNC => infn::std_binary_operation(
+                    root,
+                    gc,
+                    &args,
+                    &method,
+                    &infn::greater_roots,
+                    counter,
+                ),
                 syn::GREATER_OR_EQUAL_FUNC => infn::std_binary_operation(
                     root,
                     gc,
                     &args,
                     &method,
                     &infn::greater_or_equal_roots,
+                    counter,
                 ),
                 syn::LESS_FUNC => {
-                    infn::std_binary_operation(root, gc, &args, &method, &infn::less_roots)
+                    infn::std_binary_operation(root, gc, &args, &method, &infn::less_roots, counter)
                 }
-                syn::LESS_OR_EQUAL_FUNC => {
-                    infn::std_binary_operation(root, gc, &args, &method, &infn::less_or_equal_roots)
-                }
+                syn::LESS_OR_EQUAL_FUNC => infn::std_binary_operation(
+                    root,
+                    gc,
+                    &args,
+                    &method,
+                    &infn::less_or_equal_roots,
+                    counter,
+                ),
                 syn::OR_FUNC => {
-                    infn::std_binary_operation(root, gc, &args, &method, &infn::or_roots)
+                    infn::std_binary_operation(root, gc, &args, &method, &infn::or_roots, counter)
                 }
                 syn::AND_FUNC => {
-                    infn::std_binary_operation(root, gc, &args, &method, &infn::and_roots)
+                    infn::std_binary_operation(root, gc, &args, &method, &infn::and_roots, counter)
                 }
 
-                syn::EQUAL_FUNC => infn::equal(root, gc, &args),
-                syn::TO_STRING_FUNC => infn::to_string(root, gc),
-                syn::TO_INT_FUNC => infn::to_int(root, gc),
+                syn::EQUAL_FUNC => infn::equal(root, gc, &args, counter),
+                syn::TO_STRING_FUNC => infn::to_string(root, gc, counter),
+                syn::TO_INT_FUNC => infn::to_int(root, gc, counter),
                 syn::TO_FLOAT_FUNC => todo!(),
                 _ => {
                     return Err(RuntimeError(
@@ -175,11 +219,12 @@ impl DataObject {
         gc: &mut GarbageCollector,
         method: &String,
         args: Vec<u32>,
+        counter: &mut Counter,
     ) -> Result<ExitMethod, RuntimeError> {
         let result = match method.as_str() {
-            syn::REMOVE_FUNC => infn::remove(id, gc, &args),
-            syn::APPEND_FUNC => infn::append(id, gc, &args),
-            syn::LEN_FUNC => infn::len(id, gc),
+            syn::REMOVE_FUNC => infn::remove(id, gc, &args, counter),
+            syn::APPEND_FUNC => infn::append(id, gc, &args, counter),
+            syn::LEN_FUNC => infn::len(id, gc, counter),
             syn::INDEX_FUNC => infn::index(id, gc, &args),
             _ => {
                 return Err(RuntimeError(
@@ -216,9 +261,10 @@ impl RootFunc {
         &self,
         gc: &mut GarbageCollector,
         _vr: &VariableRegistry,
+        counter: &mut Counter,
     ) -> Result<ExitMethod, RuntimeError> {
         match self {
-            RootFunc::ReadLn => infn::readln(gc),
+            RootFunc::ReadLn => infn::readln(gc, counter),
         }
     }
 }
@@ -241,9 +287,10 @@ impl FuncDef {
         args: Vec<u32>,
         gc: &mut GarbageCollector,
         root_vr: &VariableRegistry,
+        counter: &mut Counter,
     ) -> Result<ExitMethod, RuntimeError> {
         let mut vr = root_vr.create_child();
-        self.call(args, gc, &mut vr, root_vr)
+        self.call(args, gc, &mut vr, root_vr, counter)
     }
 
     fn struct_call(
@@ -252,12 +299,13 @@ impl FuncDef {
         gc: &mut GarbageCollector,
         _struct: u32,
         root_vr: &VariableRegistry,
+        counter: &mut Counter,
     ) -> Result<ExitMethod, RuntimeError> {
         let mut vr = root_vr.create_child();
         vr.vars.insert(syn::STRUCT_SELF.to_owned(), _struct);
         let mut vr = vr.create_child();
 
-        self.call(args, gc, &mut vr, root_vr)
+        self.call(args, gc, &mut vr, root_vr, counter)
     }
 
     fn call(
@@ -266,6 +314,7 @@ impl FuncDef {
         gc: &mut GarbageCollector,
         vr: &mut VariableRegistry,
         root_vr: &VariableRegistry,
+        counter: &mut Counter,
     ) -> Result<ExitMethod, RuntimeError> {
         if args.len() != self.args.len() {
             return Err(RuntimeError(
@@ -279,7 +328,7 @@ impl FuncDef {
             if let DataObject::RootObject(root_object) = &data_case.data {
                 if data_case.ref_count > 0 {
                     let root_object = root_object.clone();
-                    let key = random();
+                    let key = counter.new_key();
                     gc.objects.insert(
                         key,
                         DataCase {
@@ -299,8 +348,8 @@ impl FuncDef {
         }
 
         let result = match &self.block {
-            FuncBlock::User(term_block) => run_term_block(term_block, gc, vr, root_vr)?,
-            FuncBlock::Root(root) => root.call(gc, &vr)?,
+            FuncBlock::User(term_block) => run_term_block(term_block, gc, vr, root_vr, counter)?,
+            FuncBlock::Root(root) => root.call(gc, &vr, counter)?,
         };
 
         if let ExitMethod::ExplicitReturn(key) = result {
@@ -349,6 +398,7 @@ fn interpret_operand_expression(
     gc: &mut GarbageCollector,
     vr: &mut VariableRegistry,
     root_vr: &VariableRegistry,
+    counter: &mut Counter,
 ) -> Result<u32, RuntimeError> {
     let result = match operand_expression {
         OperandExpression::Unary { .. } => todo!(),
@@ -358,7 +408,7 @@ fn interpret_operand_expression(
             right,
         } => {
             if let TokenType::Operator(operator) = &operand.0 {
-                let left = interpret_operand_expression(left, gc, vr, root_vr)?;
+                let left = interpret_operand_expression(left, gc, vr, root_vr, counter)?;
 
                 let mut left_object = match gc.objects.get(&left) {
                     Some(datacase) => datacase.data.clone(),
@@ -367,13 +417,14 @@ fn interpret_operand_expression(
                     }
                 };
 
-                let right = interpret_operand_expression(right, gc, vr, root_vr)?;
+                let right = interpret_operand_expression(right, gc, vr, root_vr, counter)?;
 
                 let result = match left_object.call_method(
                     gc,
                     &syn::convert_operator(operator),
                     vec![right],
                     root_vr,
+                    counter,
                 )? {
                     ExitMethod::ImplicitNullReturn => todo!(),
                     ExitMethod::ExplicitReturn(id) => id,
@@ -391,23 +442,23 @@ fn interpret_operand_expression(
                 ))
             }
         }
-        OperandExpression::Literal(literal) => gc.add_literal(literal),
+        OperandExpression::Literal(literal) => gc.add_literal(literal, counter),
         OperandExpression::Object(object) => {
-            let obj = gc.resolve_object(object, vr, root_vr)?;
+            let obj = gc.resolve_object(object, vr, root_vr, counter)?;
 
             if obj == gc.root_type_map[&RootType::Null] {
-                return Ok(gc.create_null_object());
+                return Ok(gc.create_null_object(counter));
             } else {
                 return Ok(obj);
             }
         }
-        OperandExpression::Create(create) => gc.create_object(create, vr, root_vr),
+        OperandExpression::Create(create) => gc.create_object(create, vr, root_vr, counter),
         OperandExpression::Dot { left, right } => {
-            let parent = interpret_operand_expression(&left, gc, vr, root_vr)?;
-            let obj = gc.resolve_sub_object(parent, None, right, vr, root_vr)?;
+            let parent = interpret_operand_expression(&left, gc, vr, root_vr, counter)?;
+            let obj = gc.resolve_sub_object(parent, None, right, vr, root_vr, counter)?;
             gc.release(parent);
             if obj == gc.root_type_map[&RootType::Null] {
-                return Ok(gc.create_null_object());
+                return Ok(gc.create_null_object(counter));
             } else {
                 return Ok(obj);
             }
@@ -422,12 +473,14 @@ fn run_term_block(
     gc: &mut GarbageCollector,
     vr: &mut VariableRegistry,
     root_vr: &VariableRegistry,
+    counter: &mut Counter,
 ) -> Result<ExitMethod, RuntimeError> {
     let mut vr = vr.create_child();
     for term in &block.terms {
         match term {
             Term::Print { ln, operand_block } => {
-                let value = interpret_operand_expression(operand_block, gc, &mut vr, root_vr)?;
+                let value =
+                    interpret_operand_expression(operand_block, gc, &mut vr, root_vr, counter)?;
                 let output = match gc.objects.get(&value) {
                     Some(DataCase {
                         data: DataObject::RootObject(RootObject::String(string)),
@@ -448,7 +501,7 @@ fn run_term_block(
                 gc.release(value);
             }
             Term::DeclareVar { name, value, .. } => {
-                let key = interpret_operand_expression(value, gc, &mut vr, root_vr)?;
+                let key = interpret_operand_expression(value, gc, &mut vr, root_vr, counter)?;
                 vr.vars.insert(name.clone(), key);
                 match gc.objects.get_mut(&key) {
                     Some(datacase) => datacase.ref_count += 1,
@@ -470,7 +523,7 @@ fn run_term_block(
                 }
             }
             Term::Return { value } => {
-                let result = interpret_operand_expression(value, gc, &mut vr, root_vr)?;
+                let result = interpret_operand_expression(value, gc, &mut vr, root_vr, counter)?;
                 vr.release(gc);
 
                 return Ok(ExitMethod::ExplicitReturn(result));
@@ -480,15 +533,17 @@ fn run_term_block(
                 set_operator,
                 value,
             } => {
-                let key = gc.resolve_object(var, &mut vr, root_vr)?;
+                let key = gc.resolve_object(var, &mut vr, root_vr, counter)?;
                 match set_operator {
                     Operator::Set => {
-                        let value = interpret_operand_expression(value, gc, &mut vr, root_vr)?;
+                        let value =
+                            interpret_operand_expression(value, gc, &mut vr, root_vr, counter)?;
                         gc.objects.get_mut(&key).unwrap().data = gc.objects[&value].data.clone();
                         gc.release(value);
                     }
                     _ => {
-                        let value = interpret_operand_expression(value, gc, &mut vr, root_vr)?;
+                        let value =
+                            interpret_operand_expression(value, gc, &mut vr, root_vr, counter)?;
                         let object = &mut gc.objects[&key].data.clone();
                         let function = match set_operator {
                             Operator::SetAdd => syn::ADD_FUNC,
@@ -500,8 +555,13 @@ fn run_term_block(
                             _ => todo!(),
                         };
 
-                        let value =
-                            object.call_method(gc, &function.to_owned(), vec![value], root_vr)?;
+                        let value = object.call_method(
+                            gc,
+                            &function.to_owned(),
+                            vec![value],
+                            root_vr,
+                            counter,
+                        )?;
                         match value {
                             ExitMethod::ExplicitReturn(val) => {
                                 gc.objects.get_mut(&key).unwrap().data =
@@ -519,7 +579,7 @@ fn run_term_block(
                 else_block,
             } => {
                 let operand_result =
-                    interpret_operand_expression(conditional, gc, &mut vr, root_vr)?;
+                    interpret_operand_expression(conditional, gc, &mut vr, root_vr, counter)?;
                 let result = *match gc.objects.get(&operand_result) {
                     Some(DataCase {
                         data: DataObject::RootObject(RootObject::Bool(_bool)),
@@ -534,13 +594,13 @@ fn run_term_block(
                 };
                 gc.release(operand_result);
                 if result {
-                    let output = run_term_block(block, gc, &mut vr, root_vr)?;
+                    let output = run_term_block(block, gc, &mut vr, root_vr, counter)?;
 
                     if output != ExitMethod::ImplicitNullReturn {
                         return Ok(output);
                     }
                 } else {
-                    let output = run_term_block(else_block, gc, &mut vr, root_vr)?;
+                    let output = run_term_block(else_block, gc, &mut vr, root_vr, counter)?;
 
                     if output != ExitMethod::ImplicitNullReturn {
                         return Ok(output);
@@ -548,19 +608,19 @@ fn run_term_block(
                 }
             }
             Term::Loop {
-                counter,
+                counter: counter_var,
                 conditional,
                 block,
             } => {
                 let mut vr = vr.create_child();
                 let data = DataObject::RootObject(RootObject::Int(0));
                 let data_case = DataCase { ref_count: 1, data };
-                let key = random();
+                let key = counter.new_key();
                 gc.objects.insert(key, data_case);
-                vr.add_var(counter, key);
+                vr.add_var(counter_var, key);
 
                 let operand_result =
-                    interpret_operand_expression(conditional, gc, &mut vr, root_vr)?;
+                    interpret_operand_expression(conditional, gc, &mut vr, root_vr, counter)?;
                 let mut conditional_result = match gc.objects.get(&operand_result) {
                     Some(DataCase {
                         data: DataObject::RootObject(RootObject::Bool(_bool)),
@@ -575,7 +635,7 @@ fn run_term_block(
                 };
                 gc.release(operand_result);
                 while conditional_result {
-                    let result = run_term_block(block, gc, &mut vr, root_vr)?;
+                    let result = run_term_block(block, gc, &mut vr, root_vr, counter)?;
                     match result {
                         ExitMethod::ExplicitReturn(result) => {
                             return Ok(ExitMethod::ExplicitReturn(result))
@@ -590,8 +650,13 @@ fn run_term_block(
                                 *counter += 1;
                             }
 
-                            let operand_result =
-                                interpret_operand_expression(conditional, gc, &mut vr, root_vr)?;
+                            let operand_result = interpret_operand_expression(
+                                conditional,
+                                gc,
+                                &mut vr,
+                                root_vr,
+                                counter,
+                            )?;
                             conditional_result = match gc.objects.get(&operand_result) {
                                 Some(DataCase {
                                     data: DataObject::RootObject(RootObject::Bool(_bool)),
@@ -620,7 +685,7 @@ fn run_term_block(
                 return Ok(ExitMethod::LoopContinue);
             }
             Term::Call { value } => {
-                let result = interpret_operand_expression(value, gc, &mut vr, root_vr)?;
+                let result = interpret_operand_expression(value, gc, &mut vr, root_vr, counter)?;
                 gc.release(result);
             }
         };
@@ -635,21 +700,24 @@ pub fn interpret(program: Program) -> Result<(), RuntimeError> {
         vars: HashMap::new(),
         parent: None,
     };
-    let mut gc = GarbageCollector::new(&mut root_vr);
+
+    let mut counter = Counter(0);
+
+    let mut gc = GarbageCollector::new(&mut root_vr, &mut counter);
 
     for _struct in program.structs {
-        gc.add_struct(_struct, &mut root_vr)?;
+        gc.add_struct(_struct, &mut root_vr, &mut counter)?;
     }
 
     for func in program.functions {
-        gc.add_function(func, &mut root_vr)?;
+        gc.add_function(func, &mut root_vr, &mut counter)?;
     }
 
     let result = match root_vr.vars.get(syn::PROGRAM_ENTRY) {
         Some(main_id) => match gc.global_methods.get(main_id) {
             Some(func) => {
                 let func = func.clone();
-                func.global_call(vec![gc.command_line_args], &mut gc, &root_vr)
+                func.global_call(vec![gc.command_line_args], &mut gc, &root_vr, &mut counter)
             }
             None => Err(RuntimeError(
                 format!("{} must be a function.", syn::PROGRAM_ENTRY),

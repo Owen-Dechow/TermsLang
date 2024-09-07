@@ -4,11 +4,11 @@ repository = "https://github.com/Owen-Dechow/TermsLang"
 license-file = "LICENSE.md"
 description = "The terms programming language."
 name = "termslang"
-version = "0.4.3"
+version = "0.4.4"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rand = "0.8"
+# rand = "0.8"
 clap = { version = "4.5.9", features = ["derive"] }

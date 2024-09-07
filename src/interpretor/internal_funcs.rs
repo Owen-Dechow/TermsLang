@@ -1,19 +1,20 @@
-use rand::random;
-
 use super::{
     syntax::{self as syn},
-    DataCase, DataObject, ExitMethod, GarbageCollector, RootObject, StructDef,
+    Counter, DataCase, DataObject, ExitMethod, GarbageCollector, RootObject, StructDef,
 };
 use crate::errors::{FileLocation, RuntimeError};
 use std::io;
 
-pub fn readln(gc: &mut GarbageCollector) -> Result<ExitMethod, RuntimeError> {
+pub fn readln(
+    gc: &mut GarbageCollector,
+    counter: &mut Counter,
+) -> Result<ExitMethod, RuntimeError> {
     let mut string = String::new();
     let res = io::stdin().read_line(&mut string);
     string.remove(string.len() - 1);
     match res {
         Ok(_) => {
-            let key = random();
+            let key = counter.new_key();
             gc.objects.insert(
                 key,
                 DataCase {
@@ -144,6 +145,7 @@ pub fn equal(
     left: &RootObject,
     gc: &mut GarbageCollector,
     args: &Vec<u32>,
+    counter: &mut Counter,
 ) -> Result<ExitMethod, RuntimeError> {
     let right_id = match args.first() {
         Some(id) => id,
@@ -160,7 +162,7 @@ pub fn equal(
         DataObject::RootObject(right) => equal_roots(left, &right)?,
         DataObject::ArrayObject(_) => RootObject::Bool(false),
     };
-    let key = random();
+    let key = counter.new_key();
     gc.objects.insert(
         key,
         DataCase {
@@ -258,7 +260,11 @@ pub fn greater_roots(
     })
 }
 
-pub fn to_string(root: &RootObject, gc: &mut GarbageCollector) -> Result<ExitMethod, RuntimeError> {
+pub fn to_string(
+    root: &RootObject,
+    gc: &mut GarbageCollector,
+    counter: &mut Counter,
+) -> Result<ExitMethod, RuntimeError> {
     let string = match root {
         RootObject::String(string) => string.to_owned(),
         RootObject::Int(int) => int.to_string(),
@@ -267,7 +273,7 @@ pub fn to_string(root: &RootObject, gc: &mut GarbageCollector) -> Result<ExitMet
         RootObject::Null => String::from(syn::NULL_STRING),
     };
 
-    let key = random();
+    let key = counter.new_key();
     gc.objects.insert(
         key,
         DataCase {
@@ -278,7 +284,11 @@ pub fn to_string(root: &RootObject, gc: &mut GarbageCollector) -> Result<ExitMet
     Ok(ExitMethod::ExplicitReturn(key))
 }
 
-pub fn to_int(root: &RootObject, gc: &mut GarbageCollector) -> Result<ExitMethod, RuntimeError> {
+pub fn to_int(
+    root: &RootObject,
+    gc: &mut GarbageCollector,
+    counter: &mut Counter,
+) -> Result<ExitMethod, RuntimeError> {
     let int = match root {
         RootObject::String(string) => match string.parse() {
             Ok(int) => int,
@@ -301,7 +311,7 @@ pub fn to_int(root: &RootObject, gc: &mut GarbageCollector) -> Result<ExitMethod
         RootObject::Null => 0,
     };
 
-    let key = random();
+    let key = counter.new_key();
     gc.objects.insert(
         key,
         DataCase {
@@ -436,6 +446,7 @@ pub fn std_binary_operation(
         &RootObject,
         &GarbageCollector,
     ) -> Result<RootObject, RuntimeError>,
+    counter: &mut Counter,
 ) -> Result<ExitMethod, RuntimeError> {
     let right_id = match args.first() {
         Some(id) => id,
@@ -453,7 +464,7 @@ pub fn std_binary_operation(
         DataObject::ArrayObject(_) => todo!(),
     };
     let result = operation(&left, &right, &gc)?;
-    let key = random();
+    let key = counter.new_key();
     gc.objects.insert(
         key,
         DataCase {
@@ -468,6 +479,7 @@ pub fn remove(
     id: u32,
     gc: &mut GarbageCollector,
     args: &Vec<u32>,
+    counter: &mut Counter,
 ) -> Result<ExitMethod, RuntimeError> {
     let mut len = match &gc.objects[&id].data {
         DataObject::ArrayObject(arr) => arr.0.len() as i32,
@@ -506,7 +518,7 @@ pub fn remove(
         }
     }
 
-    return Ok(ExitMethod::ExplicitReturn(gc.create_null_object()));
+    return Ok(ExitMethod::ExplicitReturn(gc.create_null_object(counter)));
 }
 
 pub fn index(
@@ -562,6 +574,7 @@ pub fn append(
     id: u32,
     gc: &mut GarbageCollector,
     args: &Vec<u32>,
+    counter: &mut Counter,
 ) -> Result<ExitMethod, RuntimeError> {
     for arg in args {
         gc.objects.get_mut(arg).unwrap().ref_count += 1;
@@ -572,11 +585,15 @@ pub fn append(
         arr.0.push(*arg);
     }
 
-    return Ok(ExitMethod::ExplicitReturn(gc.create_null_object()));
+    return Ok(ExitMethod::ExplicitReturn(gc.create_null_object(counter)));
 }
 
-pub fn len(id: u32, gc: &mut GarbageCollector) -> Result<ExitMethod, RuntimeError> {
-    let key = random();
+pub fn len(
+    id: u32,
+    gc: &mut GarbageCollector,
+    counter: &mut Counter,
+) -> Result<ExitMethod, RuntimeError> {
+    let key = counter.new_key();
 
     let len = match &gc.objects[&id].data {
         DataObject::ArrayObject(arr) => arr.0.len() as i32,
