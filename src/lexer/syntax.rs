@@ -60,7 +60,6 @@ pub fn get_syntax_map() -> SyntaxMap<'static> {
             ("if", KeyWord::If),
             ("else", KeyWord::Else),
             ("func", KeyWord::Func),
-            ("stat", KeyWord::Static),
             ("let", KeyWord::Var),
             ("updt", KeyWord::UpdateVar),
             ("cll", KeyWord::Call),

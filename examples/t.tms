@@ -4,6 +4,7 @@ struct MyStruct {
 }
 
 func null @main: str[] args {
-    let MyStruct a = $() int ~
-    cll a.[0] ~
+    let MyStruct a = $() int[] ~
+    cll a.@append.(1) ~
+    println a.[0].@str.() ~
 }

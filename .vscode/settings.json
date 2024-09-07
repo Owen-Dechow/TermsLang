@@ -6,6 +6,7 @@
         "println",
         "readln",
         "struct",
+        "Structs",
         "typeargs",
         "updt"
     ]

@@ -3,7 +3,7 @@ The terms programming language
 
 > Simple, Consise, ~~Fast~~
 
-## Latest Version: `v0.4.2`
+## Latest Version: `v0.4.3`
 
 ## Installation
 ```

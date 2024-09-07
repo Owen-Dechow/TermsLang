@@ -102,7 +102,6 @@ pub enum KeyWord {
     Break,
     Continue,
     Call,
-    Static,
     Import,
 }
 impl Display for KeyWord {
