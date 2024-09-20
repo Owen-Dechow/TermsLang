@@ -1,6 +1,6 @@
 use super::{
     syntax::{self as syn},
-    Counter, DataCase, DataObject, ExitMethod, GarbageCollector, RootObject, StructDef,
+    Counter, DataObject, ExitMethod, GarbageCollector, RootObject, StructDef,
 };
 use crate::errors::{FileLocation, RuntimeError};
 use std::io;
@@ -14,13 +14,10 @@ pub fn readln(
     string.remove(string.len() - 1);
     match res {
         Ok(_) => {
-            let key = counter.new_key();
-            gc.objects.insert(
-                key,
-                DataCase {
-                    ref_count: 0,
-                    data: DataObject::RootObject(RootObject::String(string)),
-                },
+            let key = gc.insert_data(
+                DataObject::RootObject(RootObject::String(string)),
+                counter,
+                0,
             );
             Ok(ExitMethod::ExplicitReturn(key))
         }
@@ -142,7 +139,7 @@ pub fn modulo_roots(
 }
 
 pub fn equal(
-    left: &RootObject,
+    left: u32,
     gc: &mut GarbageCollector,
     args: &Vec<u32>,
     counter: &mut Counter,
@@ -156,20 +153,19 @@ pub fn equal(
             ))
         }
     };
-    let right_object = &gc.objects[right_id].data;
+
+    let left_object = match gc.objects[&left].borrow_inner() {
+        DataObject::RootObject(root) => root,
+        _ => panic!(),
+    };
+
+    let right_object = gc.objects[right_id].borrow_inner();
     let result = match right_object {
         DataObject::StructObject(_) => RootObject::Bool(false),
-        DataObject::RootObject(right) => equal_roots(left, &right)?,
+        DataObject::RootObject(right) => equal_roots(left_object, right)?,
         DataObject::ArrayObject(_) => RootObject::Bool(false),
     };
-    let key = counter.new_key();
-    gc.objects.insert(
-        key,
-        DataCase {
-            ref_count: 0,
-            data: DataObject::RootObject(result),
-        },
-    );
+    let key = gc.insert_data(DataObject::RootObject(result), counter, 0);
     Ok(ExitMethod::ExplicitReturn(key))
 }
 
@@ -261,10 +257,15 @@ pub fn greater_roots(
 }
 
 pub fn to_string(
-    root: &RootObject,
+    root: u32,
     gc: &mut GarbageCollector,
     counter: &mut Counter,
 ) -> Result<ExitMethod, RuntimeError> {
+    let root = match gc.objects[&root].borrow_inner() {
+        DataObject::RootObject(root) => root,
+        _ => panic!(),
+    };
+
     let string = match root {
         RootObject::String(string) => string.to_owned(),
         RootObject::Int(int) => int.to_string(),
@@ -273,22 +274,24 @@ pub fn to_string(
         RootObject::Null => String::from(syn::NULL_STRING),
     };
 
-    let key = counter.new_key();
-    gc.objects.insert(
-        key,
-        DataCase {
-            ref_count: 0,
-            data: DataObject::RootObject(RootObject::String(string)),
-        },
+    let key = gc.insert_data(
+        DataObject::RootObject(RootObject::String(string)),
+        counter,
+        0,
     );
     Ok(ExitMethod::ExplicitReturn(key))
 }
 
 pub fn to_int(
-    root: &RootObject,
+    root: u32,
     gc: &mut GarbageCollector,
     counter: &mut Counter,
 ) -> Result<ExitMethod, RuntimeError> {
+    let root = match gc.objects[&root].borrow_inner() {
+        DataObject::RootObject(root) => root,
+        _ => panic!(),
+    };
+
     let int = match root {
         RootObject::String(string) => match string.parse() {
             Ok(int) => int,
@@ -311,14 +314,7 @@ pub fn to_int(
         RootObject::Null => 0,
     };
 
-    let key = counter.new_key();
-    gc.objects.insert(
-        key,
-        DataCase {
-            ref_count: 0,
-            data: DataObject::RootObject(RootObject::Int(int)),
-        },
-    );
+    let key = gc.insert_data(DataObject::RootObject(RootObject::Int(int)), counter, 0);
     Ok(ExitMethod::ExplicitReturn(key))
 }
 
@@ -437,7 +433,7 @@ pub fn and_roots(
 }
 
 pub fn std_binary_operation(
-    left: &RootObject,
+    left_ptr: u32,
     gc: &mut GarbageCollector,
     args: &Vec<u32>,
     function_name: &str,
@@ -457,21 +453,21 @@ pub fn std_binary_operation(
             ))
         }
     };
-    let right_object = &gc.objects[right_id].data;
+    let right_object = gc.objects[right_id].borrow_inner();
+
+    let left = match gc.objects[&left_ptr].borrow_inner() {
+        DataObject::RootObject(left) => left,
+        _ => panic!(),
+    };
+
     let right = match right_object {
         DataObject::StructObject(_) => todo!(),
         DataObject::RootObject(right) => right,
         DataObject::ArrayObject(_) => todo!(),
     };
+
     let result = operation(&left, &right, &gc)?;
-    let key = counter.new_key();
-    gc.objects.insert(
-        key,
-        DataCase {
-            ref_count: 0,
-            data: DataObject::RootObject(result),
-        },
-    );
+    let key = gc.insert_data(DataObject::RootObject(result), counter, 0);
     Ok(ExitMethod::ExplicitReturn(key))
 }
 
@@ -518,7 +514,7 @@ pub fn remove(
         }
     }
 
-    return Ok(ExitMethod::ExplicitReturn(gc.create_null_object(counter)));
+    return Ok(ExitMethod::ExplicitReturn(gc.null_object(counter)));
 }
 
 pub fn index(
@@ -585,7 +581,7 @@ pub fn append(
         arr.0.push(*arg);
     }
 
-    return Ok(ExitMethod::ExplicitReturn(gc.create_null_object(counter)));
+    return Ok(ExitMethod::ExplicitReturn(gc.null_object(counter)));
 }
 
 pub fn len(
@@ -593,19 +589,11 @@ pub fn len(
     gc: &mut GarbageCollector,
     counter: &mut Counter,
 ) -> Result<ExitMethod, RuntimeError> {
-    let key = counter.new_key();
-
     let len = match &gc.objects[&id].data {
         DataObject::ArrayObject(arr) => arr.0.len() as i32,
         _ => todo!(),
     };
-    gc.objects.insert(
-        key,
-        DataCase {
-            ref_count: 0,
-            data: DataObject::RootObject(RootObject::Int(len)),
-        },
-    );
 
+    let key = gc.insert_data(DataObject::RootObject(RootObject::Int(len)), counter, 0);
     return Ok(ExitMethod::ExplicitReturn(key));
 }

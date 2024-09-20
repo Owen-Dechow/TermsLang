@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, rc::Rc};
+use std::{collections::HashMap, env, rc::Rc, u32};
 
 use crate::{
     errors::RuntimeError,
@@ -70,24 +70,15 @@ impl GarbageCollector {
 
         let mut command_line_args = Vec::new();
         for arg in env::args() {
-            let key = counter.new_key();
+            let data = DataObject::RootObject(RootObject::String(arg));
+            let key = gc.insert_data(data, counter, 1);
             command_line_args.push(key);
-
-            gc.objects.insert(
-                key,
-                DataCase {
-                    ref_count: 1,
-                    data: DataObject::RootObject(RootObject::String(arg)),
-                },
-            );
         }
 
-        gc.objects.insert(
+        gc.insert_data_to_key(
+            DataObject::ArrayObject(ArrayObject(command_line_args)),
             gc.command_line_args,
-            DataCase {
-                ref_count: 0,
-                data: DataObject::ArrayObject(ArrayObject(command_line_args)),
-            },
+            0,
         );
 
         return gc;
@@ -225,17 +216,14 @@ impl GarbageCollector {
                 ObjectType::Identity(id) => match object.sub {
                     Some(_) => Err(RuntimeError(
                         "Expected type".to_string(),
-                        object.location.clone(),
+                        object.loc.clone(),
                     )),
                     None => Ok(TypeResolve::Standard(
-                        root_vr.resolve_string(id, &object.location)?,
-                        object.location.clone(),
+                        root_vr.resolve_string(id, &object.loc)?,
+                        object.loc.clone(),
                     )),
                 },
-                _ => Err(RuntimeError(
-                    "Expected type".to_string(),
-                    object.location.clone(),
-                )),
+                _ => panic!("Should Be Type"),
             },
         }
     }
@@ -249,15 +237,19 @@ impl GarbageCollector {
     ) -> Result<u32, RuntimeError> {
         match &object.kind {
             ObjectType::Identity(id) => {
-                let key = vr.resolve_string(id, &object.location)?;
+                let key = vr.resolve_string(id, &object.loc)?;
 
                 match &object.sub {
                     Some(sub) => self.resolve_sub_object(key, None, &*sub, vr, root_vr, counter),
                     None => Ok(key),
                 }
             }
-            _ => todo!(),
+            _ => panic!(),
         }
+    }
+
+    pub fn null_object(&mut self, counter: &mut Counter) -> u32 {
+        return self.insert_data(DataObject::RootObject(RootObject::Null), counter, 0);
     }
 
     fn resolve_root_sub(
@@ -281,7 +273,6 @@ impl GarbageCollector {
                     match &object.sub {
                         Some(sub) => match &sub.kind {
                             ObjectType::Call(call) => {
-                                let mut data_object = self.objects[&parent].data.clone();
                                 let args = {
                                     let mut args = Vec::new();
                                     for arg in &call.args {
@@ -291,9 +282,9 @@ impl GarbageCollector {
                                     }
                                     args
                                 };
-                                let result = match data_object
-                                    .call_method(self, id, args, root_vr, counter)?
-                                {
+                                let result = match DataObject::call_method(
+                                    parent, self, id, args, root_vr, counter,
+                                )? {
                                     ExitMethod::ImplicitNullReturn => todo!(),
                                     ExitMethod::ExplicitReturn(id) => Ok(id),
                                     ExitMethod::LoopContinue => todo!(),
@@ -318,7 +309,7 @@ impl GarbageCollector {
                                     "Root type functions must be called; alias creation,",
                                     " indexing, and object peeking is not allowed."
                                 ),
-                                object.location.clone(),
+                                object.loc.clone(),
                             )),
                         },
                         None => Err(RuntimeError(
@@ -327,13 +318,13 @@ impl GarbageCollector {
                                 "Root type functions must be called; alias creation,",
                                 " indexing, and object peeking is not allowed."
                             ),
-                            object.location.clone(),
+                            object.loc.clone(),
                         )),
                     }
                 } else {
                     Err(RuntimeError(
                         format!("{} no field or method found on struct", id),
-                        object.location.clone(),
+                        object.loc.clone(),
                     ))
                 }
             }
@@ -389,7 +380,7 @@ impl GarbageCollector {
                             "Array type functions must be called; alias creation, indexing,",
                             " and object peeking is not allowed."
                         ),
-                        object.location.clone(),
+                        object.loc.clone(),
                     )),
                 },
                 None => Err(RuntimeError(
@@ -398,29 +389,15 @@ impl GarbageCollector {
                         "Array type functions must be called; alias creation, indexing,",
                         " and object peeking is not allowed."
                     ),
-                    object.location.clone(),
+                    object.loc.clone(),
                 )),
             }
         } else {
             Err(RuntimeError(
                 format!("{} no field or method found on array", id),
-                object.location.clone(),
+                object.loc.clone(),
             ))
         }
-    }
-
-    pub fn create_null_object(&mut self, counter: &mut Counter) -> u32 {
-        let key = counter.new_key();
-
-        self.objects.insert(
-            key,
-            DataCase {
-                ref_count: 0,
-                data: DataObject::RootObject(RootObject::Null),
-            },
-        );
-
-        return key;
     }
 
     pub fn resolve_sub_object(
@@ -459,13 +436,13 @@ impl GarbageCollector {
                                             "Cannot reference function, {}, without calling",
                                             id
                                         ),
-                                        object.location.clone(),
+                                        object.loc.clone(),
                                     )),
                                 },
                                 None => {
                                     return Err(RuntimeError(
                                         format!("No field or method {} on struct", id),
-                                        object.location.clone(),
+                                        object.loc.clone(),
                                     ))
                                 }
                             }
@@ -502,7 +479,7 @@ impl GarbageCollector {
                     };
 
                     let result = match result {
-                        ExitMethod::ImplicitNullReturn => Ok(self.create_null_object(counter)),
+                        ExitMethod::ImplicitNullReturn => Ok(self.null_object(counter)),
                         ExitMethod::ExplicitReturn(id) => Ok(id),
                         ExitMethod::LoopContinue => todo!(),
                         ExitMethod::LoopBreak => todo!(),
@@ -522,7 +499,7 @@ impl GarbageCollector {
                 }
                 None => Err(RuntimeError(
                     "Object is not a function".to_string(),
-                    object.location.clone(),
+                    object.loc.clone(),
                 )),
             },
             ObjectType::Index(idx) => {
@@ -533,31 +510,37 @@ impl GarbageCollector {
                 let parent_obj = &mut self.objects.get_mut(&parent).unwrap().data;
                 let result = match parent_obj {
                     DataObject::StructObject(_struct) => {
-                        match _struct.fields.get(syntax::INDEX_FUNC) {
-                            Some(obj) => match self
-                                .global_methods
-                                .get(obj)
-                                .unwrap()
-                                .clone()
-                                .call(args, self, vr, root_vr, counter)?
-                            {
-                                ExitMethod::ImplicitNullReturn => self.create_null_object(counter),
-                                ExitMethod::ExplicitReturn(result) => result,
-                                ExitMethod::LoopContinue => todo!(),
-                                ExitMethod::LoopBreak => todo!(),
-                            },
-                            None => {
-                                return Err(RuntimeError(
-                                    format!("struct has no function {}", syntax::INDEX_FUNC),
-                                    object.location.clone(),
-                                ))
+                        match *self.global_structs[&_struct._type] {
+                            StructDef::User { ref methods, .. } => {
+                                match methods.get(syntax::INDEX_FUNC) {
+                                    Some(obj) => match self.global_methods[obj]
+                                        .clone()
+                                        .struct_call(args, self, parent, root_vr, counter)?
+                                    {
+                                        ExitMethod::ImplicitNullReturn => self.null_object(counter),
+                                        ExitMethod::ExplicitReturn(result) => result,
+                                        ExitMethod::LoopContinue => todo!(),
+                                        ExitMethod::LoopBreak => todo!(),
+                                    },
+                                    None => {
+                                        return Err(RuntimeError(
+                                            format!(
+                                                "struct has no function {} \n {:?}",
+                                                syntax::INDEX_FUNC,
+                                                _struct.fields
+                                            ),
+                                            object.loc.clone(),
+                                        ))
+                                    }
+                                }
                             }
+                            StructDef::Root { .. } => panic!(),
                         }
                     }
                     DataObject::RootObject(..) => {
                         return Err(RuntimeError(
                             "Cannot index into root object".to_string(),
-                            object.location.clone(),
+                            object.loc.clone(),
                         ))
                     }
                     DataObject::ArrayObject(..) => match DataObject::call_array_func(
@@ -594,22 +577,10 @@ impl GarbageCollector {
             TokenType::Float(float) => RootObject::Float(*float),
             TokenType::String(string) => RootObject::String(string.to_owned()),
             TokenType::Bool(_bool) => RootObject::Bool(*_bool),
-            _ => {
-                return Err(RuntimeError(
-                    format!("Invalid token literal in operand block."),
-                    literal.1.clone(),
-                ))
-            }
+            _ => panic!("Should be token literal"),
         };
 
-        let key = counter.new_key();
-        self.objects.insert(
-            key,
-            DataCase {
-                ref_count: 0,
-                data: DataObject::RootObject(root),
-            },
-        );
+        let key = self.insert_data(DataObject::RootObject(root), counter, 0);
         return Ok(key);
     }
 
@@ -659,7 +630,7 @@ impl GarbageCollector {
                         let mut fields = HashMap::new();
 
                         for (property, _type) in properties {
-                            let null = self.create_null_object(counter);
+                            let null = self.null_object(counter);
                             self.objects.get_mut(&null).unwrap().ref_count += 1;
                             fields.insert(property.clone(), null);
                         }
@@ -679,7 +650,7 @@ impl GarbageCollector {
             }
         };
 
-        self.objects.insert(key, DataCase { ref_count: 0, data });
+        let key = self.insert_data(data, counter, 0);
 
         if let Some(func_id) = new_func {
             let func = self.global_methods[&func_id].clone();
@@ -702,8 +673,24 @@ impl GarbageCollector {
     }
 
     pub fn release(&mut self, key: u32) {
-        if let Some(DataCase { ref_count: 0, .. }) = self.objects.get(&key) {
+        let data_case = &self.objects[&key];
+        if data_case.ref_count == 0 {
             self.objects.remove(&key);
         }
+    }
+
+    pub fn insert_data_to_key(&mut self, data_object: DataObject, key: u32, refs: u32) {
+        let data_case = DataCase {
+            ref_count: refs,
+            data: data_object,
+        };
+
+        self.objects.insert(key, data_case);
+    }
+
+    pub fn insert_data(&mut self, data: DataObject, counter: &mut Counter, refs: u32) -> u32 {
+        let key = counter.new_key();
+        self.insert_data_to_key(data, key, refs);
+        return key;
     }
 }

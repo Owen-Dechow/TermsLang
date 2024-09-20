@@ -77,14 +77,14 @@ enum DataObject {
 }
 impl DataObject {
     fn call_method(
-        &mut self,
+        self_ptr: u32,
         gc: &mut GarbageCollector,
         method: &String,
         args: Vec<u32>,
         root_vr: &VariableRegistry,
         counter: &mut Counter,
     ) -> Result<ExitMethod, RuntimeError> {
-        let result = match self {
+        let result = match gc.objects[&self_ptr].borrow_inner() {
             DataObject::StructObject(struct_object) => {
                 let struct_def = gc.get_struct_def_from_id(struct_object._type)?;
                 let func_id = match struct_def {
@@ -112,12 +112,17 @@ impl DataObject {
                 return func_def.struct_call(args, gc, struct_object.self_key, root_vr, counter);
             }
             DataObject::RootObject(root) => match method.as_str() {
-                syn::ADD_FUNC => {
-                    infn::std_binary_operation(root, gc, &args, method, &infn::add_roots, counter)
-                }
+                syn::ADD_FUNC => infn::std_binary_operation(
+                    self_ptr,
+                    gc,
+                    &args,
+                    method,
+                    &infn::add_roots,
+                    counter,
+                ),
 
                 syn::SUBTRACT_FUNC => infn::std_binary_operation(
-                    root,
+                    self_ptr,
                     gc,
                     &args,
                     &method,
@@ -125,7 +130,7 @@ impl DataObject {
                     counter,
                 ),
                 syn::MULTIPLY_FUNC => infn::std_binary_operation(
-                    root,
+                    self_ptr,
                     gc,
                     &args,
                     &method,
@@ -133,7 +138,7 @@ impl DataObject {
                     counter,
                 ),
                 syn::DIVIDE_FUNC => infn::std_binary_operation(
-                    root,
+                    self_ptr,
                     gc,
                     &args,
                     &method,
@@ -141,7 +146,7 @@ impl DataObject {
                     counter,
                 ),
                 syn::MODULO_FUNC => infn::std_binary_operation(
-                    root,
+                    self_ptr,
                     gc,
                     &args,
                     &method,
@@ -149,7 +154,7 @@ impl DataObject {
                     counter,
                 ),
                 syn::EXPONENT_FUNC => infn::std_binary_operation(
-                    root,
+                    self_ptr,
                     gc,
                     &args,
                     &method,
@@ -157,7 +162,7 @@ impl DataObject {
                     counter,
                 ),
                 syn::GREATER_FUNC => infn::std_binary_operation(
-                    root,
+                    self_ptr,
                     gc,
                     &args,
                     &method,
@@ -165,34 +170,49 @@ impl DataObject {
                     counter,
                 ),
                 syn::GREATER_OR_EQUAL_FUNC => infn::std_binary_operation(
-                    root,
+                    self_ptr,
                     gc,
                     &args,
                     &method,
                     &infn::greater_or_equal_roots,
                     counter,
                 ),
-                syn::LESS_FUNC => {
-                    infn::std_binary_operation(root, gc, &args, &method, &infn::less_roots, counter)
-                }
+                syn::LESS_FUNC => infn::std_binary_operation(
+                    self_ptr,
+                    gc,
+                    &args,
+                    &method,
+                    &infn::less_roots,
+                    counter,
+                ),
                 syn::LESS_OR_EQUAL_FUNC => infn::std_binary_operation(
-                    root,
+                    self_ptr,
                     gc,
                     &args,
                     &method,
                     &infn::less_or_equal_roots,
                     counter,
                 ),
-                syn::OR_FUNC => {
-                    infn::std_binary_operation(root, gc, &args, &method, &infn::or_roots, counter)
-                }
-                syn::AND_FUNC => {
-                    infn::std_binary_operation(root, gc, &args, &method, &infn::and_roots, counter)
-                }
+                syn::OR_FUNC => infn::std_binary_operation(
+                    self_ptr,
+                    gc,
+                    &args,
+                    &method,
+                    &infn::or_roots,
+                    counter,
+                ),
+                syn::AND_FUNC => infn::std_binary_operation(
+                    self_ptr,
+                    gc,
+                    &args,
+                    &method,
+                    &infn::and_roots,
+                    counter,
+                ),
 
-                syn::EQUAL_FUNC => infn::equal(root, gc, &args, counter),
-                syn::TO_STRING_FUNC => infn::to_string(root, gc, counter),
-                syn::TO_INT_FUNC => infn::to_int(root, gc, counter),
+                syn::EQUAL_FUNC => infn::equal(self_ptr, gc, &args, counter),
+                syn::TO_STRING_FUNC => infn::to_string(self_ptr, gc, counter),
+                syn::TO_INT_FUNC => infn::to_int(self_ptr, gc, counter),
                 syn::TO_FLOAT_FUNC => todo!(),
                 _ => {
                     return Err(RuntimeError(
@@ -328,14 +348,7 @@ impl FuncDef {
             if let DataObject::RootObject(root_object) = &data_case.data {
                 if data_case.ref_count > 0 {
                     let root_object = root_object.clone();
-                    let key = counter.new_key();
-                    gc.objects.insert(
-                        key,
-                        DataCase {
-                            ref_count: 1,
-                            data: DataObject::RootObject(root_object),
-                        },
-                    );
+                    let key = gc.insert_data(DataObject::RootObject(root_object), counter, 0);
                     vr.vars.insert(arg_name.clone(), key);
                 } else {
                     data_case.ref_count += 1;
@@ -384,6 +397,11 @@ struct DataCase {
     ref_count: u32,
     data: DataObject,
 }
+impl DataCase {
+    pub fn borrow_inner(&self) -> &DataObject {
+        &self.data
+    }
+}
 
 #[derive(Debug, PartialEq)]
 enum ExitMethod {
@@ -409,17 +427,10 @@ fn interpret_operand_expression(
         } => {
             if let TokenType::Operator(operator) = &operand.0 {
                 let left = interpret_operand_expression(left, gc, vr, root_vr, counter)?;
-
-                let mut left_object = match gc.objects.get(&left) {
-                    Some(datacase) => datacase.data.clone(),
-                    None => {
-                        todo!()
-                    }
-                };
-
                 let right = interpret_operand_expression(right, gc, vr, root_vr, counter)?;
 
-                let result = match left_object.call_method(
+                let result = match DataObject::call_method(
+                    left,
                     gc,
                     &syn::convert_operator(operator),
                     vec![right],
@@ -436,10 +447,7 @@ fn interpret_operand_expression(
                 gc.release(right);
                 return Ok(result);
             } else {
-                Err(RuntimeError(
-                    format!("Expected Operand"),
-                    FileLocation::None,
-                ))
+                panic!("Should be operand");
             }
         }
         OperandExpression::Literal(literal) => gc.add_literal(literal, counter),
@@ -447,7 +455,7 @@ fn interpret_operand_expression(
             let obj = gc.resolve_object(object, vr, root_vr, counter)?;
 
             if obj == gc.root_type_map[&RootType::Null] {
-                return Ok(gc.create_null_object(counter));
+                return Ok(gc.null_object(counter));
             } else {
                 return Ok(obj);
             }
@@ -458,7 +466,7 @@ fn interpret_operand_expression(
             let obj = gc.resolve_sub_object(parent, None, right, vr, root_vr, counter)?;
             gc.release(parent);
             if obj == gc.root_type_map[&RootType::Null] {
-                return Ok(gc.create_null_object(counter));
+                return Ok(gc.null_object(counter));
             } else {
                 return Ok(obj);
             }
@@ -481,11 +489,8 @@ fn run_term_block(
             Term::Print { ln, operand_block } => {
                 let value =
                     interpret_operand_expression(operand_block, gc, &mut vr, root_vr, counter)?;
-                let output = match gc.objects.get(&value) {
-                    Some(DataCase {
-                        data: DataObject::RootObject(RootObject::String(string)),
-                        ..
-                    }) => string,
+                let output = match gc.objects[&value].borrow_inner() {
+                    DataObject::RootObject(RootObject::String(string)) => string,
                     _ => {
                         return Err(RuntimeError(
                             "Cannot print non string objects".to_string(),
@@ -494,7 +499,7 @@ fn run_term_block(
                     }
                 };
                 if *ln {
-                    print!("{output}\n");
+                    println!("{output}");
                 } else {
                     print!("{output}")
                 }
@@ -544,7 +549,6 @@ fn run_term_block(
                     _ => {
                         let value =
                             interpret_operand_expression(value, gc, &mut vr, root_vr, counter)?;
-                        let object = &mut gc.objects[&key].data.clone();
                         let function = match set_operator {
                             Operator::SetAdd => syn::ADD_FUNC,
                             Operator::SetSubtract => syn::SUBTRACT_FUNC,
@@ -555,7 +559,8 @@ fn run_term_block(
                             _ => todo!(),
                         };
 
-                        let value = object.call_method(
+                        let value = DataObject::call_method(
+                            key,
                             gc,
                             &function.to_owned(),
                             vec![value],
@@ -580,11 +585,8 @@ fn run_term_block(
             } => {
                 let operand_result =
                     interpret_operand_expression(conditional, gc, &mut vr, root_vr, counter)?;
-                let result = *match gc.objects.get(&operand_result) {
-                    Some(DataCase {
-                        data: DataObject::RootObject(RootObject::Bool(_bool)),
-                        ..
-                    }) => _bool,
+                let result = *match gc.objects[&operand_result].borrow_inner() {
+                    DataObject::RootObject(RootObject::Bool(_bool)) => _bool,
                     _ => {
                         return Err(RuntimeError(
                             "Conditional was not a boolean".to_string(),
@@ -614,18 +616,13 @@ fn run_term_block(
             } => {
                 let mut vr = vr.create_child();
                 let data = DataObject::RootObject(RootObject::Int(0));
-                let data_case = DataCase { ref_count: 1, data };
-                let key = counter.new_key();
-                gc.objects.insert(key, data_case);
+                let key = gc.insert_data(data, counter, 1);
                 vr.add_var(counter_var, key);
 
                 let operand_result =
                     interpret_operand_expression(conditional, gc, &mut vr, root_vr, counter)?;
-                let mut conditional_result = match gc.objects.get(&operand_result) {
-                    Some(DataCase {
-                        data: DataObject::RootObject(RootObject::Bool(_bool)),
-                        ..
-                    }) => *_bool,
+                let mut conditional_result = match gc.objects[&operand_result].borrow_inner() {
+                    DataObject::RootObject(RootObject::Bool(_bool)) => *_bool,
                     _ => {
                         return Err(RuntimeError(
                             "Loop conditional was not a boolean".to_string(),
@@ -657,11 +654,8 @@ fn run_term_block(
                                 root_vr,
                                 counter,
                             )?;
-                            conditional_result = match gc.objects.get(&operand_result) {
-                                Some(DataCase {
-                                    data: DataObject::RootObject(RootObject::Bool(_bool)),
-                                    ..
-                                }) => *_bool,
+                            conditional_result = match gc.objects[&operand_result].borrow_inner() {
+                                DataObject::RootObject(RootObject::Bool(_bool)) => *_bool,
                                 _ => {
                                     return Err(RuntimeError(
                                         "Loop conditional was not a boolean".to_string(),

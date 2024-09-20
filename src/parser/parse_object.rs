@@ -69,7 +69,7 @@ pub fn parse_object(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Ob
                 _ => {
                     token_stream.back();
                     return Ok(Object {
-                        location: token.1,
+                        loc: token.1,
                         kind: ObjectType::Identity(id),
                         sub: None,
                     });
@@ -116,7 +116,7 @@ pub fn parse_object_peekable(
                         _ => {
                             token_stream.back();
                             return Ok(Object {
-                                location: token.1,
+                                loc: token.1,
                                 kind: ObjectType::Identity(id),
                                 sub: Some(Box::new(parse_object_peekable(token_stream, file)?)),
                             });
@@ -126,7 +126,7 @@ pub fn parse_object_peekable(
                 _ => {
                     token_stream.back();
                     return Ok(Object {
-                        location: token.1,
+                        loc: token.1,
                         kind: ObjectType::Identity(id),
                         sub: None,
                     });
@@ -158,7 +158,7 @@ pub fn parse_object_peekable_callable(
             TokenType::Identity(id) => match token_stream.advance().cloned() {
                 Some(Token(TokenType::Operator(Operator::Dot), _)) => {
                     return Ok(Object {
-                        location: token.1,
+                        loc: token.1,
                         kind: ObjectType::Identity(id),
                         sub: Some(Box::new(parse_object_peekable_callable(
                             token_stream,
@@ -169,7 +169,7 @@ pub fn parse_object_peekable_callable(
                 _ => {
                     token_stream.back();
                     return Ok(Object {
-                        location: token.1,
+                        loc: token.1,
                         kind: ObjectType::Identity(id),
                         sub: None,
                     });
@@ -181,7 +181,7 @@ pub fn parse_object_peekable_callable(
                 match token_stream.advance() {
                     Some(Token(TokenType::Operator(Operator::Dot), _)) => {
                         return Ok(Object {
-                            location: token.1,
+                            loc: token.1,
                             kind: ObjectType::Call(call),
                             sub: Some(Box::new(parse_object_peekable_callable(
                                 token_stream,
@@ -192,7 +192,7 @@ pub fn parse_object_peekable_callable(
                     _ => {
                         token_stream.back();
                         return Ok(Object {
-                            location: token.1,
+                            loc: token.1,
                             kind: ObjectType::Call(call),
                             sub: None,
                         });
@@ -209,7 +209,7 @@ pub fn parse_object_peekable_callable(
                 match token_stream.advance() {
                     Some(Token(TokenType::Operator(Operator::Dot), _)) => {
                         return Ok(Object {
-                            location: token.1,
+                            loc: token.1,
                             kind: ObjectType::Index(Box::new(index)),
                             sub: Some(Box::new(parse_object_peekable_callable(
                                 token_stream,
@@ -220,7 +220,7 @@ pub fn parse_object_peekable_callable(
                     _ => {
                         token_stream.back();
                         Ok(Object {
-                            location: token.1,
+                            loc: token.1,
                             kind: ObjectType::Index(Box::new(index)),
                             sub: None,
                         })

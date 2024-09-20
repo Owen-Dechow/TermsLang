@@ -60,10 +60,18 @@ pub enum Type {
         object: Object,
     },
 }
+impl Type {
+    pub fn get_location(&self) -> &FileLocation {
+        match self {
+            Type::Array { location, .. } => location,
+            Type::Object { object } => &object.loc,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Object {
-    pub location: FileLocation,
+    pub loc: FileLocation,
     pub kind: ObjectType,
     pub sub: Option<Box<Object>>,
 }

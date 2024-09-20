@@ -12,5 +12,5 @@ func int fib: int n {
 }
 
 func null @main: str[] args {
-    println fib.(32).@str.() ~
+    println fib.(10).@str.() ~
 }
