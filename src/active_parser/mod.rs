@@ -1,3 +1,7 @@
+mod names;
+
+use names as nm;
+
 use crate::{
     errors::{AParserError, FileLocation},
     lexer::tokens::{Operator, Token, TokenType},
@@ -39,83 +43,83 @@ impl GlobalData {
         };
 
         new.int_type = new.add_root_struct(
-            "int",
+            nm::INT,
             &[
-                ("@str", &[]),
-                ("@int", &[]),
-                ("@float", &[]),
-                ("@bool", &[]),
-                ("@new", &["int"]),
-                ("@add", &["int"]),
-                ("@sub", &["int"]),
-                ("@mult", &["int"]),
-                ("@div", &["int"]),
-                ("@mod", &["int"]),
-                ("@exp", &["int"]),
-                ("@eq", &["int"]),
-                ("@gt", &["int"]),
-                ("@gteq", &["int"]),
-                ("@lt", &["int"]),
-                ("@lteq", &["int"]),
+                (nm::F_STRING, nm::STRING, &[]),
+                (nm::F_INT, nm::INT, &[]),
+                (nm::F_FLOAT, nm::FLOAT, &[]),
+                (nm::F_BOOL, nm::BOOL, &[]),
+                (nm::F_NEW, nm::INT, &[nm::INT]),
+                (nm::F_ADD, nm::INT, &[nm::INT]),
+                (nm::F_SUB, nm::INT, &[nm::INT]),
+                (nm::F_MULT, nm::INT, &[nm::INT]),
+                (nm::F_DIV, nm::INT, &[nm::INT]),
+                (nm::F_MOD, nm::INT, &[nm::INT]),
+                (nm::F_EXP, nm::INT, &[nm::INT]),
+                (nm::F_EQ, nm::BOOL, &[nm::INT]),
+                (nm::F_GT, nm::BOOL, &[nm::INT]),
+                (nm::F_GTEQ, nm::BOOL, &[nm::INT]),
+                (nm::F_LT, nm::BOOL, &[nm::INT]),
+                (nm::F_LTEQ, nm::BOOL, &[nm::INT]),
             ],
         );
         new.null_type = new.add_root_struct(
-            "null",
+            nm::NULL,
             &[
-                ("@str", &[]),
-                ("@int", &[]),
-                ("@float", &[]),
-                ("@new", &[]),
-                ("@bool", &[]),
-                ("@eq", &["int"]),
+                (nm::F_STRING, nm::STRING, &[]),
+                (nm::F_INT, nm::INT, &[]),
+                (nm::F_FLOAT, nm::FLOAT, &[]),
+                (nm::F_NEW, nm::NULL, &[]),
+                (nm::F_BOOL, nm::BOOL, &[]),
+                (nm::F_EQ, nm::NULL, &[nm::NULL]),
             ],
         );
         new.float_type = new.add_root_struct(
-            "float",
+            nm::FLOAT,
             &[
-                ("@str", &[]),
-                ("@int", &[]),
-                ("@float", &[]),
-                ("@bool", &[]),
-                ("@new", &["float"]),
-                ("@add", &["float"]),
-                ("@sub", &["float"]),
-                ("@mult", &["float"]),
-                ("@div", &["float"]),
-                ("@mod", &["float"]),
-                ("@exp", &["float"]),
-                ("@eq", &["float"]),
-                ("@gt", &["float"]),
-                ("@gteq", &["float"]),
-                ("@lt", &["float"]),
-                ("@lteq", &["float"]),
+                (nm::F_STRING, nm::STRING, &[]),
+                (nm::F_INT, nm::INT, &[]),
+                (nm::F_FLOAT, nm::FLOAT, &[]),
+                (nm::F_BOOL, nm::BOOL, &[]),
+                (nm::F_NEW, nm::FLOAT, &[nm::FLOAT]),
+                (nm::F_ADD, nm::FLOAT, &[nm::FLOAT]),
+                (nm::F_SUB, nm::FLOAT, &[nm::FLOAT]),
+                (nm::F_MULT, nm::FLOAT, &[nm::FLOAT]),
+                (nm::F_DIV, nm::FLOAT, &[nm::FLOAT]),
+                (nm::F_MOD, nm::FLOAT, &[nm::FLOAT]),
+                (nm::F_EXP, nm::FLOAT, &[nm::FLOAT]),
+                (nm::F_EQ, nm::BOOL, &[nm::FLOAT]),
+                (nm::F_GT, nm::BOOL, &[nm::FLOAT]),
+                (nm::F_GTEQ, nm::BOOL, &[nm::FLOAT]),
+                (nm::F_LT, nm::BOOL, &[nm::FLOAT]),
+                (nm::F_LTEQ, nm::BOOL, &[nm::FLOAT]),
             ],
         );
         new.bool_type = new.add_root_struct(
-            "bool",
+            nm::BOOL,
             &[
-                ("@str", &[]),
-                ("@int", &[]),
-                ("@float", &[]),
-                ("@bool", &[]),
-                ("@new", &["bool"]),
-                ("@not", &["bool"]),
-                ("@and", &["bool"]),
-                ("@or", &["bool"]),
+                (nm::F_STRING, nm::STRING, &[]),
+                (nm::F_INT, nm::INT, &[]),
+                (nm::F_FLOAT, nm::FLOAT, &[]),
+                (nm::F_BOOL, nm::BOOL, &[]),
+                (nm::F_NEW, nm::INT, &[nm::BOOL]),
+                (nm::F_NOT, nm::INT, &[nm::BOOL]),
+                (nm::F_AND, nm::INT, &[nm::BOOL]),
+                (nm::F_OR, nm::INT, &[nm::BOOL]),
             ],
         );
         new.string_type = new.add_root_struct(
-            "str",
+            nm::STRING,
             &[
-                ("@str", &[]),
-                ("@int", &[]),
-                ("@float", &[]),
-                ("@bool", &[]),
-                ("@new", &["str"]),
-                ("@len", &[]),
-                ("@add", &["str"]),
-                ("@mult", &["int"]),
-                ("@mod", &["str"]),
+                (nm::F_STRING, nm::STRING, &[]),
+                (nm::F_INT, nm::INT, &[]),
+                (nm::F_FLOAT, nm::FLOAT, &[]),
+                (nm::F_BOOL, nm::BOOL, &[]),
+                (nm::F_NEW, nm::STRING, &[nm::STRING]),
+                (nm::F_LEN, nm::INT, &[]),
+                (nm::F_ADD, nm::STRING, &[nm::STRING]),
+                (nm::F_MULT, nm::STRING, &[nm::INT]),
+                (nm::F_MOD, nm::STRING, &[nm::STRING]),
             ],
         );
 
@@ -135,11 +139,11 @@ impl GlobalData {
         )
     }
 
-    fn add_root_struct(&mut self, name: &str, funcs: &[(&str, &[&str])]) -> Rc<AStruct> {
+    fn add_root_struct(&mut self, name: &str, funcs: &[(&str, &str, &[&str])]) -> Rc<AStruct> {
         let mut a_funcs = HashMap::new();
         for func in funcs {
             let mut args = Vec::new();
-            for arg in func.1 {
+            for arg in func.2 {
                 let a_arg = AVarDef {
                     name: String::new(),
                     _type: self.create_forward_ref(arg),
@@ -150,7 +154,7 @@ impl GlobalData {
 
             let a_func = AFunc {
                 name: func.0.to_string(),
-                returntype: self.create_forward_ref(name),
+                returntype: self.create_forward_ref(func.1),
                 block: AFuncBlock::Rust,
                 args,
             };
