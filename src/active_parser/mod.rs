@@ -6,9 +6,11 @@ use crate::{
     errors::{AParserError, FileLocation},
     lexer::tokens::{Operator, Token, TokenType},
     parser::{
-        parse_operand_block::OperandExpression, Object, ObjectType, Program, Term, TermBlock, Type,
+        parse_operand_block::OperandExpression, Call, Object, ObjectType, Program, Term, TermBlock,
+        Type,
     },
 };
+
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
@@ -192,11 +194,11 @@ impl GlobalData {
     }
 }
 
-struct DataScope {
-    parent: Option<Rc<DataScope>>,
+struct DataScope<'a> {
+    parent: Option<&'a DataScope<'a>>,
     vars: HashMap<String, Rc<RefCell<AType>>>,
 }
-impl DataScope {
+impl<'a> DataScope<'a> {
     fn new() -> Self {
         DataScope {
             parent: None,
@@ -204,9 +206,9 @@ impl DataScope {
         }
     }
 
-    fn from_parent(parent: &Rc<Self>) -> Self {
+    fn child(&'a self) -> Self {
         DataScope {
-            parent: Some(parent.clone()),
+            parent: Some(self),
             vars: HashMap::new(),
         }
     }
@@ -239,6 +241,16 @@ impl DataScope {
             Type::Object { object } => Ok(AObject::from_object(object, self, gd)?._type),
         }
     }
+
+    fn from_func_args(func: &AFunc) -> Self {
+        let mut new = DataScope::new();
+        for arg in &func.args {
+            new.vars
+                .insert(arg.name.clone(), arg._type.borrow().to_type_instance());
+        }
+
+        return new;
+    }
 }
 
 #[derive(Debug)]
@@ -270,6 +282,11 @@ enum ATerm {
     UpdateVar {
         value: AOperandExpression,
         var: AObject,
+    },
+    If {
+        conditional: AOperandExpression,
+        block: ATermBlock,
+        else_block: ATermBlock,
     },
 }
 
@@ -343,6 +360,9 @@ impl AType {
     fn to_type_instance(&self) -> Rc<RefCell<Self>> {
         match self {
             AType::StructDefRef(rc) => RefCell::new(AType::StructObject(rc.clone())).into(),
+            AType::ArrayObject(rc) => {
+                RefCell::new(AType::ArrayObject(rc.borrow().to_type_instance())).into()
+            }
             _ => panic!(),
         }
     }
@@ -423,8 +443,8 @@ impl AObject {
         gd: &GlobalData,
     ) -> Result<AObject, AParserError> {
         match parent_type {
-            AType::ArrayObject(rc) => AObject::from_object_sub_array(object, parent_type, ds, gd),
-            AType::StructObject(rc) => AObject::from_object_sub_struct(object, parent_type, ds, gd),
+            AType::ArrayObject(_) => AObject::from_object_sub_array(object, parent_type, ds, gd),
+            AType::StructObject(_) => AObject::from_object_sub_struct(object, parent_type, ds, gd),
             AType::StructDefRef(_) => {
                 return Err(AParserError(
                     format!("Cannot get field or method on struct definition"),
@@ -498,7 +518,13 @@ impl AObject {
         }
 
         let sub = if let Some(sub) = &object.sub {
-            todo!();
+            Some(Box::new(AObject::from_object_sub(
+                sub,
+                &func.returntype.borrow().to_type_instance().borrow(),
+                None,
+                ds,
+                gd,
+            )?))
         } else {
             None
         };
@@ -506,7 +532,7 @@ impl AObject {
         Ok(AObject {
             kind: AObjectType::Call(acall),
             sub,
-            _type: func.returntype.clone(),
+            _type: func.returntype.borrow().to_type_instance(),
             loc: object.loc.clone(),
         })
     }
@@ -589,6 +615,13 @@ impl AObject {
             _type,
             loc: object.loc.clone(),
         });
+    }
+
+    fn bottom_type(&self) -> Rc<RefCell<AType>> {
+        match &self.sub {
+            Some(some) => some.bottom_type(),
+            None => self._type.clone(),
+        }
     }
 }
 
@@ -679,12 +712,33 @@ impl AStruct {
             methods: HashMap::new(),
         }
     }
+
+    fn astruct_type_object_match(astruct: &Rc<Self>, inst: &AType) -> bool {
+        match inst {
+            AType::StructObject(rc) => Rc::ptr_eq(astruct, rc),
+            _ => false,
+        }
+    }
 }
 
-struct ReturnSpecs {
+#[derive(Clone)]
+struct ReturnOpts {
     expected_type: Option<Rc<RefCell<AType>>>,
     loop_returns: bool,
     require_explicit: bool,
+}
+impl ReturnOpts {
+    fn loop_opts(&self) -> Self {
+        let mut new = self.clone();
+        new.loop_returns = true;
+        return new;
+    }
+
+    fn requirement_free_opts(&self) -> Self {
+        let mut new = self.clone();
+        new.loop_returns = true;
+        return new;
+    }
 }
 
 fn aparse_operandexpression(
@@ -693,13 +747,97 @@ fn aparse_operandexpression(
     gd: &GlobalData,
 ) -> Result<AOperandExpression, AParserError> {
     match operand_expression {
-        OperandExpression::Unary { operand, val } => todo!(),
+        OperandExpression::Unary { operand, val } => {
+            let func = match &operand.0 {
+                TokenType::Operator(Operator::Not) => nm::F_NOT,
+                _ => panic!(),
+            };
+
+            let left = aparse_operandexpression(&val, ds, gd)?;
+            let object = Object {
+                loc: operand.1.clone(),
+                kind: ObjectType::Identity(func.to_owned()),
+                sub: Some(Box::new(Object {
+                    loc: operand.1.clone(),
+                    kind: ObjectType::Call(Call { args: Vec::new() }),
+                    sub: None,
+                })),
+            };
+
+            let right = AObject::from_object_sub(&object, &left._type.borrow(), None, ds, gd)?;
+
+            Ok(AOperandExpression {
+                _type: right._type.clone(),
+                value: AOperandExpressionValue::Dot {
+                    left: Box::new(left),
+                    right: Box::new(AOperandExpression {
+                        _type: right._type.clone(),
+                        value: AOperandExpressionValue::Object(right),
+                    }),
+                },
+            })
+        }
         OperandExpression::Binary {
             operand,
             left,
             right,
-        } => todo!(),
-        OperandExpression::Dot { left, right } => todo!(),
+        } => {
+            let func = match operand.0 {
+                TokenType::Operator(Operator::Add) => nm::F_ADD,
+                TokenType::Operator(Operator::Subtract) => nm::F_SUB,
+                TokenType::Operator(Operator::Multiply) => nm::F_MULT,
+                TokenType::Operator(Operator::Divide) => nm::F_DIV,
+                TokenType::Operator(Operator::Modulo) => nm::F_MOD,
+                TokenType::Operator(Operator::Exponent) => nm::F_EXP,
+                TokenType::Operator(Operator::Equal) => nm::F_EQ,
+                TokenType::Operator(Operator::Greater) => nm::F_GT,
+                TokenType::Operator(Operator::GreaterOrEqual) => nm::F_GTEQ,
+                TokenType::Operator(Operator::Less) => nm::F_LT,
+                TokenType::Operator(Operator::LessOrEqual) => nm::F_LTEQ,
+                TokenType::Operator(Operator::And) => nm::F_AND,
+                TokenType::Operator(Operator::Or) => nm::F_OR,
+                _ => panic!(),
+            };
+            let left = aparse_operandexpression(&left, ds, gd)?;
+            let object = Object {
+                loc: operand.1.clone(),
+                kind: ObjectType::Identity(func.to_owned()),
+                sub: Some(Box::new(Object {
+                    loc: operand.1.clone(),
+                    kind: ObjectType::Call(Call {
+                        args: vec![*right.clone()],
+                    }),
+                    sub: None,
+                })),
+            };
+
+            let right = AObject::from_object_sub(&object, &left._type.borrow(), None, ds, gd)?;
+
+            Ok(AOperandExpression {
+                _type: right.bottom_type(),
+                value: AOperandExpressionValue::Dot {
+                    left: Box::new(left),
+                    right: Box::new(AOperandExpression {
+                        _type: right._type.clone(),
+                        value: AOperandExpressionValue::Object(right),
+                    }),
+                },
+            })
+        }
+        OperandExpression::Dot { left, right } => {
+            let left = aparse_operandexpression(&left, ds, gd)?;
+            let right = AObject::from_object_sub(&right, &left._type.borrow(), None, ds, gd)?;
+            Ok(AOperandExpression {
+                _type: right.bottom_type(),
+                value: AOperandExpressionValue::Dot {
+                    left: Box::new(left),
+                    right: Box::new(AOperandExpression {
+                        _type: right._type.clone(),
+                        value: AOperandExpressionValue::Object(right),
+                    }),
+                },
+            })
+        }
         OperandExpression::Literal(literal) => {
             let a_literal = ALiteral::from_token_literal(literal);
             let a_type = AType::from_aliteral(&a_literal, gd);
@@ -711,24 +849,25 @@ fn aparse_operandexpression(
         OperandExpression::Object(obj) => {
             let a_object = AObject::from_object(obj, ds, gd)?;
             return Ok(AOperandExpression {
-                _type: a_object._type.clone(),
+                _type: a_object.bottom_type(),
                 value: AOperandExpressionValue::Object(a_object),
             });
         }
-        OperandExpression::Create(_) => todo!(),
+        OperandExpression::Create(create) => todo!(),
     }
 }
 
 fn aparse_termblock(
     block: &TermBlock,
-    parent_ds: Rc<DataScope>,
+    parent_ds: &DataScope,
     gd: &GlobalData,
-    return_opts: &ReturnSpecs,
+    return_opts: &ReturnOpts,
 ) -> Result<ATermBlock, AParserError> {
     let mut a_terms = Vec::new();
-    let mut ds = DataScope::from_parent(&parent_ds);
+    let mut ds = parent_ds.child();
+    let num_terms = block.terms.len();
 
-    for term in &block.terms {
+    for (term_idx, term) in block.terms.iter().enumerate() {
         let a_term = match term {
             Term::Print { ln, operand_block } => ATerm::Print {
                 ln: *ln,
@@ -773,6 +912,13 @@ fn aparse_termblock(
                             FileLocation::None,
                         ));
                     }
+                }
+
+                if term_idx != num_terms - 1 {
+                    return Err(AParserError(
+                        format!("Return must be last term in block."),
+                        FileLocation::None,
+                    ));
                 }
 
                 ATerm::Return { value }
@@ -828,8 +974,30 @@ fn aparse_termblock(
                 else_block,
             } => {
                 let conditional = aparse_operandexpression(conditional, &ds, gd)?;
+                if !AStruct::astruct_type_object_match(&gd.bool_type, &conditional._type.borrow()) {
+                    return Err(AParserError(
+                        format!(
+                            "Conditional must be of type bool, found type {:?}",
+                            &conditional._type.borrow()
+                        ),
+                        FileLocation::None,
+                    ));
+                }
 
-                todo!()
+                let return_opts = if term_idx == num_terms - 1 {
+                    return_opts.clone()
+                } else {
+                    return_opts.requirement_free_opts()
+                };
+
+                let block = aparse_termblock(block, &ds, gd, &return_opts)?;
+                let else_block = aparse_termblock(else_block, &ds, gd, &return_opts)?;
+
+                ATerm::If {
+                    conditional,
+                    block,
+                    else_block,
+                }
             }
             Term::Loop {
                 counter,
@@ -968,13 +1136,13 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
         if let AFuncBlock::TermsLang(ref a_termblock) = func.block {
             if let ATermBlock::NotYetEvaluated(ref block) = *a_termblock.borrow() {
                 let return_specs = if func.returntype.borrow().is_nulldef(&gd) {
-                    ReturnSpecs {
+                    ReturnOpts {
                         expected_type: None,
                         loop_returns: false,
                         require_explicit: false,
                     }
                 } else {
-                    ReturnSpecs {
+                    ReturnOpts {
                         expected_type: Some(func.returntype.clone()),
                         loop_returns: false,
                         require_explicit: false,
@@ -982,7 +1150,7 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
                 };
                 new_a_termblock = Some(aparse_termblock(
                     block,
-                    DataScope::new().into(),
+                    &DataScope::from_func_args(func),
                     &gd,
                     &return_specs,
                 )?);
