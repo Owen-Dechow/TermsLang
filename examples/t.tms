@@ -1,7 +1,11 @@
 ""
 
+struct MyStruct {
+    func null @new: {
+        
+    }
+}
 
 func str @main: str[] args {
-    let int a = 0 ~
-    println a.@str.() ~
+    let int a = $(0) MyStruct ~
 }

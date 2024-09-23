@@ -288,6 +288,9 @@ enum ATerm {
         block: ATermBlock,
         else_block: ATermBlock,
     },
+    Call {
+        value: AOperandExpression,
+    },
 }
 
 enum AType {
@@ -495,8 +498,8 @@ impl AObject {
                 format!(
                     "{} expects {} arguments: {} given.",
                     func.name,
+                    func.args.len(),
                     call.args.len(),
-                    func.args.len()
                 ),
                 object.loc.clone(),
             ));
@@ -689,6 +692,10 @@ enum AOperandExpressionValue {
     },
     Object(AObject),
     Literal(ALiteral),
+    Create {
+        _type: Rc<RefCell<AType>>,
+        args: Vec<AOperandExpression>,
+    },
 }
 
 #[derive(Debug)]
@@ -853,7 +860,43 @@ fn aparse_operandexpression(
                 value: AOperandExpressionValue::Object(a_object),
             });
         }
-        OperandExpression::Create(create) => todo!(),
+        OperandExpression::Create(create) => {
+            let _type = ds.resolve_type(&create.kind, gd)?;
+            let new_method = match *_type.borrow() {
+                AType::StructDefRef(ref rc) => match **rc {
+                    AStruct::System { ref methods, .. } => methods.contains_key(nm::F_NEW),
+                    AStruct::User { ref methods, .. } => methods.contains_key(nm::F_NEW),
+                },
+                AType::ArrayObject(_) => false,
+                _ => panic!(),
+            };
+
+            let args = if new_method {
+                let mut args = Vec::new();
+                for arg in &create.args.args {
+                    args.push(aparse_operandexpression(&arg, ds, gd)?);
+                }
+
+                args
+            } else {
+                if create.args.args.len() > 0 {
+                    return Err(AParserError(
+                        format!("{:?} has no explicit {} function, therefore $() should not take any arguments.", _type.borrow(), nm::F_NEW),
+                        FileLocation::None,
+                    ));
+                }
+
+                Vec::new()
+            };
+
+            return Ok(AOperandExpression {
+                _type: _type.borrow().to_type_instance(),
+                value: AOperandExpressionValue::Create {
+                    _type: _type.clone(),
+                    args,
+                },
+            });
+        }
     }
 }
 
@@ -1006,7 +1049,10 @@ fn aparse_termblock(
             } => todo!(),
             Term::Break => todo!(),
             Term::Continue => todo!(),
-            Term::Call { value } => todo!(),
+            Term::Call { value } => {
+                let value = aparse_operandexpression(value, &ds, gd)?;
+                ATerm::Call { value }
+            }
         };
 
         a_terms.push(a_term);
