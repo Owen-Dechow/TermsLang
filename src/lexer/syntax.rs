@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use super::tokens::{KeyWord, Operator};
 
-pub const WHITE_SPACE: &str = " \n\t";
 pub const DECIMAL: char = '.';
 pub const VARIABLE_ALLOWED_EXTRA_CHARS: &str = "@_";
 pub const COMMENT: char = '#';

@@ -8,7 +8,7 @@ use crate::errors::{FileLocation, LexerError};
 use self::{
     syntax::{
         get_syntax_map, SyntaxMap, COMMENT, DECIMAL, IGNORED_IN_NUMBERS, LINE_TERMINATOR, NEW_LINE,
-        STRING_QUOTES, VARIABLE_ALLOWED_EXTRA_CHARS, WHITE_SPACE,
+        STRING_QUOTES, VARIABLE_ALLOWED_EXTRA_CHARS,
     },
     tokens::{Operator, Token, TokenType},
 };
@@ -73,8 +73,8 @@ fn map_partial_fit(pattern: &String, map: &HashMap<&str, Operator>) -> bool {
     return false;
 }
 
-// State machine to handel each character
-fn handel_char(
+// State machine to handle each character
+fn handle_char(
     c: char,
     section: &mut Section,
     result: &mut Vec<Token>,
@@ -87,7 +87,7 @@ fn handel_char(
         // If there is no current state
         SectionState::None => {
             // Skip white space
-            if WHITE_SPACE.contains(c) {
+            if c.is_whitespace() {
                 return Ok(());
             }
 
@@ -179,7 +179,7 @@ fn handel_char(
                 positioning.build(),
             ));
             section.reset();
-            return handel_char(c, section, result, syntax_map, positioning, lex_comments);
+            return handle_char(c, section, result, syntax_map, positioning, lex_comments);
         }
 
         // If state = float
@@ -201,7 +201,7 @@ fn handel_char(
                 positioning.build(),
             ));
             section.reset();
-            return handel_char(c, section, result, syntax_map, positioning, lex_comments);
+            return handle_char(c, section, result, syntax_map, positioning, lex_comments);
         }
 
         // If state = Word (Variable or Kewword)
@@ -239,7 +239,7 @@ fn handel_char(
 
             // Reset state
             section.reset();
-            return handel_char(c, section, result, syntax_map, positioning, lex_comments);
+            return handle_char(c, section, result, syntax_map, positioning, lex_comments);
         }
 
         // If state = operator
@@ -264,7 +264,7 @@ fn handel_char(
                         positioning.build(),
                     ));
                     section.reset();
-                    return handel_char(c, section, result, syntax_map, positioning, lex_comments);
+                    return handle_char(c, section, result, syntax_map, positioning, lex_comments);
                 } else {
                     // Mark invalid operator
                     return Err(LexerError(
@@ -348,7 +348,7 @@ pub fn lex(input: &String, lex_comments: bool, file: &PathBuf) -> Result<Vec<Tok
             positioning.end_col += 1;
         }
 
-        if let Err(err) = handel_char(
+        if let Err(err) = handle_char(
             c,
             &mut section,
             &mut result,
