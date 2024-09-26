@@ -291,6 +291,13 @@ enum ATerm {
     Call {
         value: AOperandExpression,
     },
+    Loop {
+        counter: String,
+        conditional: AOperandExpression,
+        block: ATermBlock,
+    },
+    Break,
+    Continue,
 }
 
 enum AType {
@@ -368,6 +375,10 @@ impl AType {
             }
             _ => panic!(),
         }
+    }
+
+    fn from_astruct(astruct: Rc<AStruct>) -> Rc<RefCell<Self>> {
+        RefCell::new(AType::StructDefRef(astruct)).into()
     }
 }
 
@@ -514,7 +525,10 @@ impl AObject {
                 .borrow()
                 .structdefref_is_instance(&a_arg._type.borrow())
             {
-                return Err(AParserError(format!("Type Missmatch"), FileLocation::None));
+                return Err(AParserError(
+                    format!("Missmatched Types (3)"),
+                    FileLocation::None,
+                ));
             }
 
             acall.args.push(a_arg);
@@ -596,8 +610,52 @@ impl AObject {
                     connected_instance_type,
                 )
             }
-            ObjectType::Call(call) => todo!(),
-            ObjectType::Index(operand_expression) => todo!(),
+            ObjectType::Call(call) => {
+                return Err(AParserError(
+                    format!("Cannot directly call function on struct"),
+                    object.loc.clone(),
+                ))
+            }
+            ObjectType::Index(idx) => {
+                let (name, methods) = match **astruct {
+                    AStruct::System {
+                        ref name,
+                        ref methods,
+                        ..
+                    } => (name, methods),
+                    AStruct::User {
+                        ref name,
+                        ref methods,
+                        ..
+                    } => (name, methods),
+                };
+
+                let func = match methods.get(nm::F_INDEX) {
+                    Some(func) => func,
+                    None => {
+                        return Err(AParserError(
+                            format!("{} has no method {}", name, nm::F_INDEX),
+                            object.loc.clone(),
+                        ))
+                    }
+                };
+
+                let object = AObject::from_object_sub_function(
+                    &Object {
+                        loc: object.loc.clone(),
+                        kind: ObjectType::Call(Call {
+                            args: vec![*idx.clone()],
+                        }),
+                        sub: None,
+                    },
+                    &AType::FuncDefRef(func.clone()),
+                    None,
+                    ds,
+                    gd,
+                )?;
+
+                (object.kind, object._type, None)
+            }
         };
 
         let sub = if let Some(ref sub) = object.sub {
@@ -929,7 +987,7 @@ fn aparse_termblock(
                     .structdefref_is_instance(&a_value._type.borrow())
                 {
                     return Err(AParserError(
-                        format!("Missmatched types"),
+                        format!("Missmatched types (0)"),
                         FileLocation::None,
                     ));
                 }
@@ -951,7 +1009,7 @@ fn aparse_termblock(
                         .structdefref_is_instance(&value._type.borrow())
                     {
                         return Err(AParserError(
-                            format!("Missmatched types"),
+                            format!("Missmatched types (1)"),
                             FileLocation::None,
                         ));
                     }
@@ -1006,7 +1064,10 @@ fn aparse_termblock(
                 let var = AObject::from_object(var, &ds, gd)?;
 
                 if !AType::instance_type_match(&var._type.borrow(), &value._type.borrow()) {
-                    return Err(AParserError(format!("Missmatched types"), var.loc.clone()));
+                    return Err(AParserError(
+                        format!("Missmatched types (2)"),
+                        var.loc.clone(),
+                    ));
                 }
 
                 ATerm::UpdateVar { value, var }
@@ -1046,9 +1107,48 @@ fn aparse_termblock(
                 counter,
                 conditional,
                 block,
-            } => todo!(),
-            Term::Break => todo!(),
-            Term::Continue => todo!(),
+            } => {
+                let mut ds = ds.child();
+
+                ds.vars.insert(
+                    counter.to_string(),
+                    AType::from_astruct(gd.int_type.clone())
+                        .borrow()
+                        .to_type_instance(),
+                );
+
+                let conditional = aparse_operandexpression(conditional, &ds, gd)?;
+
+                let return_opts = return_opts.requirement_free_opts().loop_opts();
+
+                let block = aparse_termblock(block, &ds, gd, &return_opts)?;
+
+                ATerm::Loop {
+                    counter: counter.to_string(),
+                    conditional,
+                    block,
+                }
+            }
+            Term::Break => {
+                if return_opts.loop_returns {
+                    ATerm::Break
+                } else {
+                    return Err(AParserError(
+                        format!("Cannot break from outside loop."),
+                        FileLocation::None,
+                    ));
+                }
+            }
+            Term::Continue => {
+                if return_opts.loop_returns {
+                    ATerm::Continue
+                } else {
+                    return Err(AParserError(
+                        format!("Cannot continue from outside loop."),
+                        FileLocation::None,
+                    ));
+                }
+            }
             Term::Call { value } => {
                 let value = aparse_operandexpression(value, &ds, gd)?;
                 ATerm::Call { value }
@@ -1069,7 +1169,10 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
 
     for _struct in &program.structs {
         if names.contains(&_struct.name) {
-            todo!();
+            return Err(AParserError(
+                format!("Global object {} has multiple definitions.", _struct.name),
+                FileLocation::None,
+            ));
         } else {
             names.insert(&_struct.name);
         }
@@ -1123,7 +1226,10 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
 
     for func in &program.functions {
         if names.contains(&func.name) {
-            todo!();
+            return Err(AParserError(
+                format!("Global object {} has multiple definitions.", func.name),
+                FileLocation::None,
+            ));
         } else {
             names.insert(&func.name);
         }

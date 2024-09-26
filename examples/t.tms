@@ -4,8 +4,13 @@ struct MyStruct {
     func null @new: {
         
     }
+
+    func null @idx: int f {
+
+    }
 }
 
 func str @main: str[] args {
-    let int a = $(0) MyStruct ~
+    let MyStruct a = $() MyStruct ~
+    cll a.[0] ~
 }
