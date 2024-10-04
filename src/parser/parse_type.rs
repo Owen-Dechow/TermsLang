@@ -56,7 +56,7 @@ pub fn get_associated_types(
 pub fn parse_type(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Type, ParserError> {
     // Get the typename token
     let typename = parse_object_peekable(token_stream, file)?;
-    let location = typename.location.clone();
+    let location = typename.loc.clone();
     let mut _type = Type::Object { object: typename };
 
     // Wrap matrix

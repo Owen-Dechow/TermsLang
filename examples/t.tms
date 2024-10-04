@@ -1,10 +1,16 @@
 ""
 
 struct MyStruct {
+    func null @new: {
+        
+    }
+
+    func null @idx: int f {
+
+    }
 }
 
-func null @main: str[] args {
-    let MyStruct a = $() int[] ~
-    cll a.@append.(1) ~
-    println a.[0].@str.() ~
+func str @main: str[] args {
+    let MyStruct a = $() MyStruct ~
+    cll a.[0] ~
 }
