@@ -53,7 +53,6 @@ fn main() {
             return;
         }
     };
-    println!("{:?}\n", aparse);
 
     // Run program
     let _interpretor_out = match interpretor::interpret(parse_out) {
