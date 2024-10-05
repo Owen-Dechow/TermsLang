@@ -3,7 +3,7 @@ The terms programming language
 
 > Simple, Consise, ~~Fast~~
 
-## Latest Version: `v0.4.4`
+## Latest Version: `v0.5.0`
 
 ## Installation
 ```
@@ -30,5 +30,6 @@ VSCode Support: https://github.com/Owen-Dechow/TermsVsCodeSupport
 ## Progress
 - [x] Main Lexer
 - [x] Main Parser
-- [x] Main interpreter
+- [x] Main Active Parser
+- [x] Main Interpreter
 - [ ] Version 1.0
