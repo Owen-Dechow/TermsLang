@@ -1,16 +1,6 @@
 ""
 
-struct MyStruct {
-    func null @new: {
-        
-    }
-
-    func null @idx: int f {
-
-    }
-}
-
 func str @main: str[] args {
-    let MyStruct a = $() MyStruct ~
-    cll a.[0] ~
+    let int[] a = $() int[] ~
+    cll a.[0] + 2 ~
 }

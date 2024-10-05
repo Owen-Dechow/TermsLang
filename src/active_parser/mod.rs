@@ -6,8 +6,8 @@ use crate::{
     errors::{AParserError, FileLocation},
     lexer::tokens::{Operator, Token, TokenType},
     parser::{
-        parse_operand_block::OperandExpression, Call, Object, ObjectType, Program, Term, TermBlock,
-        Type,
+        parse_operand_block::OperandExpression, Call, Function, Object, ObjectType, Program, Term,
+        TermBlock, Type,
     },
 };
 
@@ -157,7 +157,7 @@ impl GlobalData {
             let a_func = AFunc {
                 name: func.0.to_string(),
                 returntype: self.create_forward_ref(func.1),
-                block: AFuncBlock::Rust,
+                block: AFuncBlock::Internal,
                 args,
             };
 
@@ -346,6 +346,9 @@ impl AType {
             (AType::StructDefRef(defref), AType::StructObject(object)) => {
                 Rc::ptr_eq(defref, object)
             }
+            (AType::ArrayObject(arr_type), AType::ArrayObject(object)) => {
+                arr_type.borrow().structdefref_is_instance(&object.borrow())
+            }
             _ => panic!(
                 "Bad StructDefRef Is Instance Check:\n - self: {:?}\n - inst: {:?}",
                 self, inst
@@ -370,8 +373,18 @@ impl AType {
     fn to_type_instance(&self) -> Rc<RefCell<Self>> {
         match self {
             AType::StructDefRef(rc) => RefCell::new(AType::StructObject(rc.clone())).into(),
-            AType::ArrayObject(rc) => {
-                RefCell::new(AType::ArrayObject(rc.borrow().to_type_instance())).into()
+            AType::ArrayObject(arr_type) => {
+                RefCell::new(AType::ArrayObject(arr_type.borrow().to_type_instance())).into()
+            }
+            _ => panic!(),
+        }
+    }
+
+    fn to_type_defref(&self) -> Rc<RefCell<Self>> {
+        match self {
+            AType::StructObject(rc) => RefCell::new(AType::StructDefRef(rc.clone())).into(),
+            AType::ArrayObject(arr_type) => {
+                RefCell::new(AType::ArrayObject(arr_type.borrow().to_type_defref())).into()
             }
             _ => panic!(),
         }
@@ -385,10 +398,10 @@ impl AType {
 impl Debug for AType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::ArrayObject(arg0) => f.debug_tuple(&format!("Type({:?}[])", arg0)).finish(),
+            Self::ArrayObject(arg0) => f.debug_tuple(&format!("{:?}[]", arg0.borrow())).finish(),
             Self::StructObject(arg0) => f
                 .debug_tuple(&format!(
-                    "Type($() {})",
+                    "$({})",
                     match arg0.as_ref() {
                         AStruct::System { name, .. } => name,
                         AStruct::User { name, .. } => name,
@@ -397,15 +410,15 @@ impl Debug for AType {
                 .finish(),
             Self::StructDefRef(arg0) => f
                 .debug_tuple(&format!(
-                    "Type({})",
+                    "{}",
                     match arg0.as_ref() {
                         AStruct::System { name, .. } => name,
                         AStruct::User { name, .. } => name,
                     }
                 ))
                 .finish(),
-            Self::FuncDefRef(arg0) => f.debug_tuple(&format!("Type(func {})", arg0.name)).finish(),
-            Self::NotYetDefined(..) => f.debug_tuple("Type(NotYetDefined)").finish(),
+            Self::FuncDefRef(arg0) => f.debug_tuple(&format!("func({})", arg0.name)).finish(),
+            Self::NotYetDefined(..) => f.debug_tuple("NotYetDefined").finish(),
         }
     }
 }
@@ -560,8 +573,129 @@ impl AObject {
         ds: &DataScope,
         gd: &GlobalData,
     ) -> Result<AObject, AParserError> {
-        todo!()
+        let arr_type = match &parent_type {
+            AType::ArrayObject(rc) => rc.clone(),
+            _ => panic!(),
+        };
+
+        match &object.kind {
+            ObjectType::Identity(id) => {
+                let (returntype, args) = match id.as_str() {
+                    nm::F_INDEX => (
+                        arr_type,
+                        vec![AVarDef {
+                            name: String::from("idx"),
+                            _type: AType::from_astruct(gd.int_type.clone()),
+                        }],
+                    ),
+                    nm::F_APPEND => (
+                        AType::from_astruct(gd.null_type.clone()),
+                        vec![AVarDef {
+                            name: String::from("idx"),
+                            _type: arr_type,
+                        }],
+                    ),
+                    nm::F_REMOVE => (
+                        AType::from_astruct(gd.null_type.clone()),
+                        vec![AVarDef {
+                            name: String::from("idx"),
+                            _type: AType::from_astruct(gd.int_type.clone()),
+                        }],
+                    ),
+                    nm::F_LEN => (AType::from_astruct(gd.int_type.clone()), vec![]),
+
+                    _ => {
+                        return Err(AParserError(
+                            format!("{} is not a reconized method of vectors.", id),
+                            object.loc.clone(),
+                        ))
+                    }
+                };
+
+                let func = AType::FuncDefRef(
+                    AFunc {
+                        name: id.to_string(),
+                        returntype: returntype.borrow().to_type_defref(),
+                        block: AFuncBlock::InternalArray,
+                        args,
+                    }
+                    .into(),
+                );
+
+                let _type = Rc::new(RefCell::new(func));
+
+                return Ok(AObject {
+                    kind: AObjectType::Identity(id.clone()),
+                    sub: match &object.sub {
+                        Some(sub) => Some(Box::new(AObject::from_object_sub_function(
+                            &sub,
+                            &_type.borrow(),
+                            Some(parent_type),
+                            ds,
+                            gd,
+                        )?)),
+                        None => None,
+                    },
+                    _type,
+                    loc: object.loc.clone(),
+                });
+            }
+            ObjectType::Call(_) => Err(AParserError(
+                format!("Cannot directly call vector."),
+                object.loc.clone(),
+            )),
+            ObjectType::Index(operand_expression) => {
+                let name = nm::F_INDEX.to_string();
+                let returntype = match parent_type {
+                    AType::ArrayObject(rc) => rc.clone(),
+                    _ => panic!(),
+                };
+
+                let args = vec![AVarDef {
+                    name: String::from("idx"),
+                    _type: AType::from_astruct(gd.int_type.clone()),
+                }];
+
+                let func = AType::FuncDefRef(
+                    AFunc {
+                        name: name.clone(),
+                        returntype: returntype.borrow().to_type_defref(),
+                        block: AFuncBlock::InternalArray,
+                        args,
+                    }
+                    .into(),
+                );
+
+                let _type = Rc::new(RefCell::new(func));
+
+                let arg = aparse_operandexpression(operand_expression, ds, gd)?;
+
+                let sub = match &object.sub {
+                    Some(sub) => Some(Box::new(AObject::from_object_sub_function(
+                        &sub,
+                        &_type.borrow(),
+                        Some(parent_type),
+                        ds,
+                        gd,
+                    )?)),
+                    None => None,
+                };
+
+                return Ok(AObject {
+                    kind: AObjectType::Identity(name),
+                    sub: Some(Box::new(AObject {
+                        kind: AObjectType::Call(ACall { args: vec![arg] }),
+                        sub,
+                        _type: returntype,
+                        loc: object.loc.clone(),
+                    })),
+                    _type,
+                    loc: object.loc.clone(),
+                });
+            }
+        }
     }
+
     fn from_object_sub_struct(
         object: &Object,
         parent_type: &AType,
@@ -705,8 +839,9 @@ struct AVarDef {
 
 #[derive(Debug)]
 enum AFuncBlock {
-    Rust,
+    Internal,
     TermsLang(Rc<RefCell<ATermBlock>>),
+    InternalArray,
 }
 
 #[derive(Debug)]

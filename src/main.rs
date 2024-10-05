@@ -53,6 +53,7 @@ fn main() {
             return;
         }
     };
+    dbg!("{:?}", aparse);
 
     // Run program
     let _interpretor_out = match interpretor::interpret(parse_out) {

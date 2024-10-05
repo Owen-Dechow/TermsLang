@@ -29,7 +29,7 @@ pub const NEW_FUNC: &str = "@new";
 pub const APPEND_FUNC: &str = "@append";
 pub const REMOVE_FUNC: &str = "@remove";
 pub const LEN_FUNC: &str = "@len";
-pub const INDEX_FUNC: &str = "@index";
+pub const INDEX_FUNC: &str = "@idx";
 
 pub const ARRAY_METHODS: [&str; 4] = [APPEND_FUNC, REMOVE_FUNC, LEN_FUNC, INDEX_FUNC];
 

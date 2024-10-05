@@ -25,5 +25,6 @@ pub const F_NOT: &str = "@not";
 pub const F_AND: &str = "@and";
 pub const F_OR: &str = "@or";
 pub const F_LEN: &str = "@len";
-
 pub const F_INDEX: &str = "@idx";
+pub const F_APPEND: &str = "@append";
+pub const F_REMOVE: &str = "@remove";
