@@ -6,8 +6,8 @@ use crate::{
     errors::{AParserError, FileLocation},
     lexer::tokens::{Operator, Token, TokenType},
     parser::{
-        parse_operand_block::OperandExpression, Call, Function, Object, ObjectType, Program, Term,
-        TermBlock, Type,
+        parse_operand_block::OperandExpression, Call, Object, ObjectType, Program, Term, TermBlock,
+        Type,
     },
 };
 
@@ -37,11 +37,11 @@ impl GlobalData {
             functions: HashMap::new(),
             not_yet_defined: Vec::new(),
 
-            int_type: AStruct::tmp_none().into(),
-            bool_type: AStruct::tmp_none().into(),
-            string_type: AStruct::tmp_none().into(),
-            float_type: AStruct::tmp_none().into(),
-            null_type: AStruct::tmp_none().into(),
+            int_type: AStruct::tmp_empty_root().into(),
+            bool_type: AStruct::tmp_empty_root().into(),
+            string_type: AStruct::tmp_empty_root().into(),
+            float_type: AStruct::tmp_empty_root().into(),
+            null_type: AStruct::tmp_empty_root().into(),
         };
 
         new.int_type = new.add_root_struct(
@@ -125,6 +125,8 @@ impl GlobalData {
             ],
         );
 
+        new.add_root_function(nm::F_READLN, new.string_type.clone());
+
         return new;
     }
 
@@ -164,14 +166,28 @@ impl GlobalData {
             a_funcs.insert(func.0.to_string(), a_func.into());
         }
 
-        let a_struct = Rc::new(AStruct::System {
+        let a_struct = Rc::new(AStruct {
             name: name.to_string(),
             fields: HashMap::new(),
             methods: a_funcs,
+            root: true,
         });
 
         self.structs.insert(name.to_string(), a_struct.clone());
         return a_struct;
+    }
+
+    fn add_root_function(&mut self, name: &str, returntype: Rc<AStruct>) {
+        self.functions.insert(
+            name.to_string(),
+            AFunc {
+                name: name.to_string(),
+                returntype: AType::from_astruct(returntype),
+                block: AFuncBlock::Internal,
+                args: Vec::new(),
+            }
+            .into(),
+        );
     }
 
     fn resolve_id(
@@ -255,18 +271,18 @@ impl<'a> DataScope<'a> {
 
 #[derive(Debug)]
 pub struct AProgram {
-    structs: Vec<Rc<AStruct>>,
-    functions: Vec<Rc<AFunc>>,
+    pub structs: Vec<Rc<AStruct>>,
+    pub functions: Vec<Rc<AFunc>>,
 }
 
 #[derive(Debug)]
-enum ATermBlock {
+pub enum ATermBlock {
     A { terms: Vec<ATerm> },
     NotYetEvaluated(TermBlock),
 }
 
 #[derive(Debug)]
-enum ATerm {
+pub enum ATerm {
     Print {
         ln: bool,
         value: AOperandExpression,
@@ -300,7 +316,7 @@ enum ATerm {
     Continue,
 }
 
-enum AType {
+pub enum AType {
     ArrayObject(Rc<RefCell<AType>>),
     StructObject(Rc<AStruct>),
     StructDefRef(Rc<AStruct>),
@@ -399,24 +415,8 @@ impl Debug for AType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::ArrayObject(arg0) => f.debug_tuple(&format!("{:?}[]", arg0.borrow())).finish(),
-            Self::StructObject(arg0) => f
-                .debug_tuple(&format!(
-                    "$({})",
-                    match arg0.as_ref() {
-                        AStruct::System { name, .. } => name,
-                        AStruct::User { name, .. } => name,
-                    }
-                ))
-                .finish(),
-            Self::StructDefRef(arg0) => f
-                .debug_tuple(&format!(
-                    "{}",
-                    match arg0.as_ref() {
-                        AStruct::System { name, .. } => name,
-                        AStruct::User { name, .. } => name,
-                    }
-                ))
-                .finish(),
+            Self::StructObject(arg0) => f.debug_tuple(&format!("$({})", arg0.name)).finish(),
+            Self::StructDefRef(arg0) => f.debug_tuple(&format!("{}", arg0.name)).finish(),
             Self::FuncDefRef(arg0) => f.debug_tuple(&format!("func({})", arg0.name)).finish(),
             Self::NotYetDefined(..) => f.debug_tuple("NotYetDefined").finish(),
         }
@@ -709,29 +709,19 @@ impl AObject {
 
         let (kind, _type, connected_instance_type) = match &object.kind {
             ObjectType::Identity(id) => {
-                let (name, fields, methods) = match **astruct {
-                    AStruct::System {
-                        ref name,
-                        ref fields,
-                        ref methods,
-                    } => (name, fields, methods),
-                    AStruct::User {
-                        ref name,
-                        ref fields,
-                        ref methods,
-                    } => (name, fields, methods),
-                };
-
-                let (_type, connected_instance_type) = match fields.get(id) {
+                let (_type, connected_instance_type) = match astruct.fields.get(id) {
                     Some(some) => (some._type.clone(), None),
-                    None => match methods.get(id) {
+                    None => match astruct.methods.get(id) {
                         Some(some) => (
                             RefCell::new(AType::FuncDefRef(some.clone())).into(),
                             Some(parent_type),
                         ),
                         None => {
                             return Err(AParserError(
-                                format!("Struct object {} has no field or method {}.", name, id),
+                                format!(
+                                    "Struct object {} has no field or method {}.",
+                                    astruct.name, id
+                                ),
                                 object.loc.clone(),
                             ));
                         }
@@ -751,24 +741,11 @@ impl AObject {
                 ))
             }
             ObjectType::Index(idx) => {
-                let (name, methods) = match **astruct {
-                    AStruct::System {
-                        ref name,
-                        ref methods,
-                        ..
-                    } => (name, methods),
-                    AStruct::User {
-                        ref name,
-                        ref methods,
-                        ..
-                    } => (name, methods),
-                };
-
-                let func = match methods.get(nm::F_INDEX) {
+                let func = match astruct.methods.get(nm::F_INDEX) {
                     Some(func) => func,
                     None => {
                         return Err(AParserError(
-                            format!("{} has no method {}", name, nm::F_INDEX),
+                            format!("{} has no method {}", astruct.name, nm::F_INDEX),
                             object.loc.clone(),
                         ))
                     }
@@ -832,24 +809,24 @@ struct ACall {
 }
 
 #[derive(Debug)]
-struct AVarDef {
-    name: String,
-    _type: Rc<RefCell<AType>>,
+pub struct AVarDef {
+    pub name: String,
+    pub _type: Rc<RefCell<AType>>,
 }
 
 #[derive(Debug)]
-enum AFuncBlock {
+pub enum AFuncBlock {
     Internal,
     TermsLang(Rc<RefCell<ATermBlock>>),
     InternalArray,
 }
 
 #[derive(Debug)]
-struct AFunc {
-    name: String,
-    returntype: Rc<RefCell<AType>>,
-    block: AFuncBlock,
-    args: Vec<AVarDef>,
+pub struct AFunc {
+    pub name: String,
+    pub returntype: Rc<RefCell<AType>>,
+    pub block: AFuncBlock,
+    pub args: Vec<AVarDef>,
 }
 
 #[derive(Debug)]
@@ -872,7 +849,7 @@ impl ALiteral {
 }
 
 #[derive(Debug)]
-struct AOperandExpression {
+pub struct AOperandExpression {
     _type: Rc<RefCell<AType>>,
     value: AOperandExpressionValue,
 }
@@ -892,24 +869,19 @@ enum AOperandExpressionValue {
 }
 
 #[derive(Debug)]
-enum AStruct {
-    System {
-        name: String,
-        fields: HashMap<String, AVarDef>,
-        methods: HashMap<String, Rc<AFunc>>,
-    },
-    User {
-        name: String,
-        fields: HashMap<String, AVarDef>,
-        methods: HashMap<String, Rc<AFunc>>,
-    },
+pub struct AStruct {
+    pub name: String,
+    pub fields: HashMap<String, AVarDef>,
+    pub methods: HashMap<String, Rc<AFunc>>,
+    pub root: bool,
 }
 impl AStruct {
-    fn tmp_none() -> Self {
-        Self::System {
+    fn tmp_empty_root() -> Self {
+        Self {
             name: String::new(),
             fields: HashMap::new(),
             methods: HashMap::new(),
+            root: true,
         }
     }
 
@@ -1056,10 +1028,7 @@ fn aparse_operandexpression(
         OperandExpression::Create(create) => {
             let _type = ds.resolve_type(&create.kind, gd)?;
             let new_method = match *_type.borrow() {
-                AType::StructDefRef(ref rc) => match **rc {
-                    AStruct::System { ref methods, .. } => methods.contains_key(nm::F_NEW),
-                    AStruct::User { ref methods, .. } => methods.contains_key(nm::F_NEW),
-                },
+                AType::StructDefRef(ref rc) => rc.methods.contains_key(nm::F_NEW),
                 AType::ArrayObject(_) => false,
                 _ => panic!(),
             };
@@ -1349,10 +1318,11 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
             methods.insert(a_method.name.to_owned(), a_method.into());
         }
 
-        let a_struct = Rc::new(AStruct::User {
+        let a_struct = Rc::new(AStruct {
             name,
             fields,
             methods,
+            root: false,
         });
 
         gd.structs.insert(_struct.name.clone(), a_struct.clone());

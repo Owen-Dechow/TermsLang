@@ -21,5 +21,8 @@ func int fib: int n {
 }
 
 func null @main: str[] args {
-    println fib.(10).@str.() ~
+    println "Enter a positive integer." ~
+    let str n = @readln.() ~
+    let int p = n.@int.() ~
+    println fib.(p).@str.() ~
 }

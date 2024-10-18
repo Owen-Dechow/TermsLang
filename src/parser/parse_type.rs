@@ -42,7 +42,7 @@ pub fn parse_type(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Type
     return Ok(_type);
 }
 
-// Gen variable signiture: type<>[] name
+// Gen variable signiture: type[] name
 pub fn parse_var_sig(
     token_stream: &mut TokenStream,
     file: &PathBuf,

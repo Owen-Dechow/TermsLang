@@ -1,4 +1,5 @@
 mod active_parser;
+mod ainterpretor;
 mod cli;
 pub mod errors;
 mod formmatter;
@@ -55,7 +56,7 @@ fn main() {
     };
 
     // Run program
-    let _interpretor_out = match interpretor::interpret(parse_out) {
+    let _interpretor_out = match ainterpretor::interpret(aparse) {
         Ok(intperpretation) => intperpretation,
         Err(err) => {
             println!("{}", err.prettify());
