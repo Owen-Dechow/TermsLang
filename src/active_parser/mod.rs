@@ -1421,6 +1421,41 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
         }
     }
 
+    for (_name, _struct) in &gd.structs {
+        for (_name, func) in _struct.methods {
+            let mut new_a_termblock = None;
+            if let AFuncBlock::TermsLang(ref a_termblock) = func.block {
+                if let ATermBlock::NotYetEvaluated(ref block) = *a_termblock.borrow() {
+                    let return_specs = if func.returntype.borrow().is_nulldef(&gd) {
+                        ReturnOpts {
+                            expected_type: None,
+                            loop_returns: false,
+                            require_explicit: false,
+                        }
+                    } else {
+                        ReturnOpts {
+                            expected_type: Some(func.returntype.clone()),
+                            loop_returns: false,
+                            require_explicit: false,
+                        }
+                    };
+                    new_a_termblock = Some(aparse_termblock(
+                        block,
+                        &DataScope::from_func_args_this(func, _struct.clone()),
+                        &gd,
+                        &return_specs,
+                    )?);
+                }
+            }
+
+            if let AFuncBlock::TermsLang(ref a_termblock) = func.block {
+                if let Some(some) = new_a_termblock {
+                    a_termblock.replace(some);
+                }
+            }
+        }
+    }
+
     let a_program = AProgram { structs, functions };
 
     Ok(a_program)

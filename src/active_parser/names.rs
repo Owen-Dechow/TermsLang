@@ -30,3 +30,5 @@ pub const F_APPEND: &str = "@append";
 pub const F_REMOVE: &str = "@remove";
 
 pub const F_READLN: &str = "@readln";
+
+pub const THIS: &str = "@this";
