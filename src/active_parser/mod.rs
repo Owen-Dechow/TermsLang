@@ -267,6 +267,16 @@ impl<'a> DataScope<'a> {
 
         return new;
     }
+
+    fn from_func_args_this(func: &AFunc, this: Rc<AStruct>) -> Self {
+        let mut new = Self::from_func_args(func);
+        new.vars.insert(
+            names::THIS.to_string(),
+            AType::from_astruct(this).borrow().to_type_instance(),
+        );
+
+        return new;
+    }
 }
 
 #[derive(Debug)]
@@ -1422,7 +1432,7 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
     }
 
     for (_name, _struct) in &gd.structs {
-        for (_name, func) in _struct.methods {
+        for (_name, func) in &_struct.methods {
             let mut new_a_termblock = None;
             if let AFuncBlock::TermsLang(ref a_termblock) = func.block {
                 if let ATermBlock::NotYetEvaluated(ref block) = *a_termblock.borrow() {
@@ -1441,7 +1451,7 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
                     };
                     new_a_termblock = Some(aparse_termblock(
                         block,
-                        &DataScope::from_func_args_this(func, _struct.clone()),
+                        &DataScope::from_func_args_this(&func, _struct.clone()),
                         &gd,
                         &return_specs,
                     )?);
