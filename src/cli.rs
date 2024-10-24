@@ -8,4 +8,7 @@ pub struct Args {
 
     #[arg(long, short)]
     pub format: bool,
+
+    #[arg()]
+    pub args: Vec<String>,
 }

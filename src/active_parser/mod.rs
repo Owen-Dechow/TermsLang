@@ -1,4 +1,4 @@
-mod names;
+pub mod names;
 
 use names as nm;
 
@@ -210,6 +210,15 @@ impl GlobalData {
     }
 }
 
+#[derive(Debug)]
+pub struct ARootTypeCollection {
+    pub int_type: Rc<AStruct>,
+    pub bool_type: Rc<AStruct>,
+    pub string_type: Rc<AStruct>,
+    pub float_type: Rc<AStruct>,
+    pub null_type: Rc<AStruct>,
+}
+
 struct DataScope<'a> {
     parent: Option<&'a DataScope<'a>>,
     vars: HashMap<String, Rc<RefCell<AType>>>,
@@ -283,6 +292,7 @@ impl<'a> DataScope<'a> {
 pub struct AProgram {
     pub structs: Vec<Rc<AStruct>>,
     pub functions: Vec<Rc<AFunc>>,
+    pub root_types: ARootTypeCollection,
 }
 
 #[derive(Debug)]
@@ -375,6 +385,7 @@ impl AType {
             (AType::ArrayObject(arr_type), AType::ArrayObject(object)) => {
                 arr_type.borrow().structdefref_is_instance(&object.borrow())
             }
+            (AType::ArrayObject(..), AType::StructObject(..)) => false,
             _ => panic!(
                 "Bad StructDefRef Is Instance Check:\n - self: {:?}\n - inst: {:?}",
                 self, inst
@@ -385,7 +396,11 @@ impl AType {
     fn instance_type_match(&self, inst: &Self) -> bool {
         match (self, inst) {
             (AType::StructObject(rc1), AType::StructObject(rc2)) => Rc::ptr_eq(rc1, rc2),
-            _ => panic!(),
+            (AType::ArrayObject(rc1), AType::ArrayObject(rc2)) => {
+                rc1.borrow().instance_type_match(&rc2.borrow())
+            }
+            (AType::ArrayObject(..), AType::StructObject(..)) => false,
+            _ => panic!("{:?} > {:?}", self, inst),
         }
     }
 
@@ -396,7 +411,7 @@ impl AType {
         }
     }
 
-    fn to_type_instance(&self) -> Rc<RefCell<Self>> {
+    pub fn to_type_instance(&self) -> Rc<RefCell<Self>> {
         match self {
             AType::StructDefRef(rc) => RefCell::new(AType::StructObject(rc.clone())).into(),
             AType::ArrayObject(arr_type) => {
@@ -416,7 +431,7 @@ impl AType {
         }
     }
 
-    fn from_astruct(astruct: Rc<AStruct>) -> Rc<RefCell<Self>> {
+    pub fn from_astruct(astruct: Rc<AStruct>) -> Rc<RefCell<Self>> {
         RefCell::new(AType::StructDefRef(astruct)).into()
     }
 }
@@ -434,11 +449,11 @@ impl Debug for AType {
 }
 
 #[derive(Debug)]
-struct AObject {
-    kind: AObjectType,
-    sub: Option<Box<AObject>>,
-    _type: Rc<RefCell<AType>>,
-    loc: FileLocation,
+pub struct AObject {
+    pub kind: AObjectType,
+    pub sub: Option<Box<AObject>>,
+    pub _type: Rc<RefCell<AType>>,
+    pub loc: FileLocation,
 }
 impl AObject {
     fn from_object(
@@ -456,7 +471,6 @@ impl AObject {
             Some(Box::new(AObject::from_object_sub(
                 &sub,
                 &_type.borrow(),
-                None,
                 ds,
                 gd,
             )?))
@@ -475,7 +489,6 @@ impl AObject {
     fn from_object_sub(
         object: &Object,
         parent_type: &AType,
-        connected_instance_type: Option<&AType>,
         ds: &DataScope,
         gd: &GlobalData,
     ) -> Result<AObject, AParserError> {
@@ -488,13 +501,7 @@ impl AObject {
                     object.loc.clone(),
                 ))
             }
-            AType::FuncDefRef(_) => AObject::from_object_sub_function(
-                object,
-                parent_type,
-                connected_instance_type,
-                ds,
-                gd,
-            ),
+            AType::FuncDefRef(_) => AObject::from_object_sub_function(object, parent_type, ds, gd),
             _ => panic!(),
         }
     }
@@ -502,7 +509,6 @@ impl AObject {
     fn from_object_sub_function(
         object: &Object,
         parent_type: &AType,
-        connected_instance_type: Option<&AType>,
         ds: &DataScope,
         gd: &GlobalData,
     ) -> Result<AObject, AParserError> {
@@ -561,7 +567,6 @@ impl AObject {
             Some(Box::new(AObject::from_object_sub(
                 sub,
                 &func.returntype.borrow().to_type_instance().borrow(),
-                None,
                 ds,
                 gd,
             )?))
@@ -640,7 +645,6 @@ impl AObject {
                         Some(sub) => Some(Box::new(AObject::from_object_sub_function(
                             &sub,
                             &_type.borrow(),
-                            Some(parent_type),
                             ds,
                             gd,
                         )?)),
@@ -684,7 +688,6 @@ impl AObject {
                     Some(sub) => Some(Box::new(AObject::from_object_sub_function(
                         &sub,
                         &_type.borrow(),
-                        Some(parent_type),
                         ds,
                         gd,
                     )?)),
@@ -717,7 +720,7 @@ impl AObject {
             _ => panic!(),
         };
 
-        let (kind, _type, connected_instance_type) = match &object.kind {
+        let (kind, _type, ..) = match &object.kind {
             ObjectType::Identity(id) => {
                 let (_type, connected_instance_type) = match astruct.fields.get(id) {
                     Some(some) => (some._type.clone(), None),
@@ -744,7 +747,7 @@ impl AObject {
                     connected_instance_type,
                 )
             }
-            ObjectType::Call(call) => {
+            ObjectType::Call(..) => {
                 return Err(AParserError(
                     format!("Cannot directly call function on struct"),
                     object.loc.clone(),
@@ -770,7 +773,6 @@ impl AObject {
                         sub: None,
                     },
                     &AType::FuncDefRef(func.clone()),
-                    None,
                     ds,
                     gd,
                 )?;
@@ -783,7 +785,6 @@ impl AObject {
             Some(Box::new(AObject::from_object_sub(
                 &sub,
                 &_type.borrow(),
-                None,
                 ds,
                 gd,
             )?))
@@ -808,14 +809,14 @@ impl AObject {
 }
 
 #[derive(Debug)]
-enum AObjectType {
+pub enum AObjectType {
     Identity(String),
     Call(ACall),
 }
 
 #[derive(Debug)]
-struct ACall {
-    args: Vec<AOperandExpression>,
+pub struct ACall {
+    pub args: Vec<AOperandExpression>,
 }
 
 #[derive(Debug)]
@@ -840,7 +841,7 @@ pub struct AFunc {
 }
 
 #[derive(Debug)]
-enum ALiteral {
+pub enum ALiteral {
     Int(i32),
     Float(f32),
     String(String),
@@ -861,14 +862,14 @@ impl ALiteral {
 #[derive(Debug)]
 pub struct AOperandExpression {
     _type: Rc<RefCell<AType>>,
-    value: AOperandExpressionValue,
+    pub value: AOperandExpressionValue,
 }
 
 #[derive(Debug)]
-enum AOperandExpressionValue {
+pub enum AOperandExpressionValue {
     Dot {
         left: Box<AOperandExpression>,
-        right: Box<AOperandExpression>,
+        right: AObject,
     },
     Object(AObject),
     Literal(ALiteral),
@@ -946,16 +947,13 @@ fn aparse_operandexpression(
                 })),
             };
 
-            let right = AObject::from_object_sub(&object, &left._type.borrow(), None, ds, gd)?;
+            let right = AObject::from_object_sub(&object, &left._type.borrow(), ds, gd)?;
 
             Ok(AOperandExpression {
                 _type: right._type.clone(),
                 value: AOperandExpressionValue::Dot {
                     left: Box::new(left),
-                    right: Box::new(AOperandExpression {
-                        _type: right._type.clone(),
-                        value: AOperandExpressionValue::Object(right),
-                    }),
+                    right,
                 },
             })
         }
@@ -993,30 +991,24 @@ fn aparse_operandexpression(
                 })),
             };
 
-            let right = AObject::from_object_sub(&object, &left._type.borrow(), None, ds, gd)?;
+            let right = AObject::from_object_sub(&object, &left._type.borrow(), ds, gd)?;
 
             Ok(AOperandExpression {
                 _type: right.bottom_type(),
                 value: AOperandExpressionValue::Dot {
                     left: Box::new(left),
-                    right: Box::new(AOperandExpression {
-                        _type: right._type.clone(),
-                        value: AOperandExpressionValue::Object(right),
-                    }),
+                    right,
                 },
             })
         }
         OperandExpression::Dot { left, right } => {
             let left = aparse_operandexpression(&left, ds, gd)?;
-            let right = AObject::from_object_sub(&right, &left._type.borrow(), None, ds, gd)?;
+            let right = AObject::from_object_sub(&right, &left._type.borrow(), ds, gd)?;
             Ok(AOperandExpression {
                 _type: right.bottom_type(),
                 value: AOperandExpressionValue::Dot {
                     left: Box::new(left),
-                    right: Box::new(AOperandExpression {
-                        _type: right._type.clone(),
-                        value: AOperandExpressionValue::Object(right),
-                    }),
+                    right,
                 },
             })
         }
@@ -1038,15 +1030,36 @@ fn aparse_operandexpression(
         OperandExpression::Create(create) => {
             let _type = ds.resolve_type(&create.kind, gd)?;
             let new_method = match *_type.borrow() {
-                AType::StructDefRef(ref rc) => rc.methods.contains_key(nm::F_NEW),
-                AType::ArrayObject(_) => false,
+                AType::StructDefRef(ref rc) => rc.methods.get(nm::F_NEW).cloned(),
+                AType::ArrayObject(..) => None,
                 _ => panic!(),
             };
 
-            let args = if new_method {
+            let args = if let Some(new_method) = new_method {
                 let mut args = Vec::new();
-                for arg in &create.args.args {
-                    args.push(aparse_operandexpression(&arg, ds, gd)?);
+
+                for (arg, argdef) in zip(&create.args.args, &new_method.args) {
+                    let arg = aparse_operandexpression(&arg, ds, gd)?;
+
+                    if !argdef
+                        ._type
+                        .borrow()
+                        .structdefref_is_instance(&arg._type.borrow())
+                    {
+                        return Err(AParserError(
+                            format!("Invalid arg to {}.", nm::F_NEW),
+                            FileLocation::None,
+                        ));
+                    }
+
+                    args.push(arg);
+                }
+
+                if new_method.args.len() != args.len() {
+                    return Err(AParserError(
+                        format!("Invalid number of args to {}.", nm::F_NEW),
+                        FileLocation::None,
+                    ));
                 }
 
                 args
@@ -1084,10 +1097,21 @@ fn aparse_termblock(
 
     for (term_idx, term) in block.terms.iter().enumerate() {
         let a_term = match term {
-            Term::Print { ln, operand_block } => ATerm::Print {
-                ln: *ln,
-                value: aparse_operandexpression(operand_block, &ds, gd)?,
-            },
+            Term::Print { ln, operand_block } => {
+                let value = aparse_operandexpression(operand_block, &ds, gd)?;
+
+                if !AType::from_astruct(gd.string_type.clone())
+                    .borrow()
+                    .structdefref_is_instance(&value._type.borrow())
+                {
+                    return Err(AParserError(
+                        "Cannot print non string objects.".to_string(),
+                        FileLocation::None,
+                    ));
+                }
+
+                ATerm::Print { ln: *ln, value }
+            }
             Term::DeclareVar {
                 name,
                 vartype,
@@ -1177,7 +1201,7 @@ fn aparse_termblock(
                 let value = aparse_operandexpression(&operand_expression, &ds, gd)?;
                 let var = AObject::from_object(var, &ds, gd)?;
 
-                if !AType::instance_type_match(&var._type.borrow(), &value._type.borrow()) {
+                if !AType::instance_type_match(&var.bottom_type().borrow(), &value._type.borrow()) {
                     return Err(AParserError(
                         format!("Missmatched types (2)"),
                         var.loc.clone(),
@@ -1297,7 +1321,9 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
 
         for prop in &_struct.properties {
             let name = prop.identity.clone();
-            let _type = AType::from_type_nyd(&prop.argtype, &mut gd);
+            let _type = AType::from_type_nyd(&prop.argtype, &mut gd)
+                .borrow()
+                .to_type_instance();
             let field = AVarDef { name, _type };
             fields.insert(field.name.to_owned(), field);
         }
@@ -1466,7 +1492,17 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
         }
     }
 
-    let a_program = AProgram { structs, functions };
+    let a_program = AProgram {
+        structs,
+        functions,
+        root_types: ARootTypeCollection {
+            int_type: gd.int_type,
+            bool_type: gd.bool_type,
+            string_type: gd.string_type,
+            float_type: gd.float_type,
+            null_type: gd.null_type,
+        },
+    };
 
     Ok(a_program)
 }

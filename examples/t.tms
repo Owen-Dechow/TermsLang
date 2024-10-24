@@ -1,6 +1,27 @@
 ""
 
+struct MyStruct {
+    let str a ~
+    let int b ~
+
+    func null @new: str a, int b {
+        updt @this.a = a ~
+        updt @this.b = b ~
+    }
+
+    func str @str: {
+        return @this.a ~
+    }
+
+    func null my_func: int n {
+        println "Func" ~
+        cll @this.my_func.(n - 1) ~
+    }
+}
+
 func str @main: str[] args {
-    let int[] a = $() int[] ~
-    cll a.[0] + 2 ~
+    let MyStruct a = $("HELLO WORLD", 1) MyStruct ~
+    println a.@str.() ~
+    cll a.my_func.(3) ~
+    # cll @main.(args) ~
 }

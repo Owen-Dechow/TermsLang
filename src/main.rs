@@ -56,7 +56,7 @@ fn main() {
     };
 
     // Run program
-    let _interpretor_out = match ainterpretor::interpret(aparse) {
+    let _interpretor_out = match ainterpretor::interpret(aparse, args) {
         Ok(intperpretation) => intperpretation,
         Err(err) => {
             println!("{}", err.prettify());

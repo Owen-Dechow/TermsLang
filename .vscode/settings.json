@@ -1,7 +1,12 @@
 {
     "cSpell.words": [
+        "acall",
+        "afunc",
+        "aliteral",
+        "aobject",
         "aparse",
         "aparser",
+        "astruct",
         "atype",
         "bools",
         "funcs",
@@ -10,6 +15,7 @@
         "println",
         "readln",
         "struct",
+        "structdefref",
         "Structs",
         "typeargs",
         "updt"
