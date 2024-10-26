@@ -44,13 +44,6 @@ impl TokenStream {
 }
 
 #[derive(Debug, Clone)]
-pub enum Array {
-    Matrix(Index),
-    Normal,
-    Not,
-}
-
-#[derive(Debug, Clone)]
 pub enum Type {
     Array {
         _type: Box<Type>,
@@ -93,9 +86,6 @@ pub enum ObjectType {
 pub struct Call {
     pub args: Vec<OperandExpression>,
 }
-
-#[derive(Debug, Clone)]
-pub struct Index(Vec<OperandExpression>);
 
 #[derive(Debug, Clone)]
 pub struct VarSigniture {
