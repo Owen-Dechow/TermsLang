@@ -14,8 +14,10 @@ struct MyStruct {
     }
 
     func null my_func: int n {
-        println "Func" ~
-        cll @this.my_func.(n - 1) ~
+        if n >= 0 {
+            println "Func %" % n.@str.() ~
+            cll @this.my_func.(n - 1) ~
+        }
     }
 }
 
