@@ -1,29 +1,13 @@
 ""
 
-struct MyStruct {
-    let str a ~
-    let int b ~
+struct t {
+    let int v ~
+}
 
-    func null @new: str a, int b {
-        updt @this.a = a ~
-        updt @this.b = b ~
-    }
-
-    func str @str: {
-        return @this.a ~
-    }
-
-    func null my_func: int n {
-        if n >= 0 {
-            println "Func %" % n.@str.() ~
-            cll @this.my_func.(n - 1) ~
-        }
-    }
+func @nil b: int n {
+    updt n -= 1 ~
 }
 
 func str @main: str[] args {
-    let MyStruct a = $("HELLO WORLD", 1) MyStruct ~
-    println a.@str.() ~
-    cll a.my_func.(3) ~
-    # cll @main.(args) ~
+    println (1 + ($() t).v).@str.() ~
 }

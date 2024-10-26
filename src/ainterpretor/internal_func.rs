@@ -2,12 +2,32 @@ use std::{cell::RefCell, io, rc::Rc};
 
 use crate::{
     active_parser::{names as nm, AFunc, AType},
-    errors::RuntimeError,
+    errors::{FileLocation, RuntimeError},
 };
 
 use super::{rc_ref, BlockExit, Data, DataScope, GlobalData, Root, RootValue, StructObject};
 
 macro_rules! root {
+    ($data:expr) => {{
+        match *$data.borrow() {
+            Data::StructObject(ref struct_object) => match struct_object {
+                StructObject::Root(ref root) => match root.value {
+                    RootValue::Null => {
+                        return Err(RuntimeError(
+                            format!("{} value error.", nm::NULL),
+                            FileLocation::None,
+                        ))
+                    }
+                    _ => root,
+                },
+                _ => panic!(),
+            },
+            _ => panic!(),
+        }
+    }};
+}
+
+macro_rules! nroot {
     ($data:expr) => {{
         match *$data.borrow() {
             Data::StructObject(ref struct_object) => match struct_object {
@@ -19,7 +39,7 @@ macro_rules! root {
     }};
 }
 
-pub fn this<'a>(ds: Option<&'a DataScope<'a>>) -> &'a Rc<RefCell<Data>> {
+fn this<'a>(ds: Option<&'a DataScope<'a>>) -> &'a Rc<RefCell<Data>> {
     match ds {
         Some(ds) => &ds.data[nm::THIS],
         None => panic!(),
@@ -54,27 +74,40 @@ pub fn interpret_function(
         nm::F_INT => to_int(this(ds)),
         nm::F_FLOAT => to_float(this(ds)),
         nm::F_STRING => to_string(this(ds)),
+        nm::F_NEW => new(this(ds), args.get(0), gd),
         _ => todo!("Function {} not yet implemented.", func.name),
     };
 
-    Ok(BlockExit::Explicit(out))
+    Ok(BlockExit::Explicit(out?))
 }
 
-fn readln(gd: &GlobalData) -> Rc<RefCell<Data>> {
+fn new(
+    a: &Rc<RefCell<Data>>,
+    b: Option<&Rc<RefCell<Data>>>,
+    gd: &GlobalData,
+) -> Result<Rc<RefCell<Data>>, RuntimeError> {
+    if let Some(b) = b {
+        (*a).replace(Data::StructObject(StructObject::Root(nroot!(b).clone())));
+    };
+
+    return Ok(gd.null());
+}
+
+fn readln(gd: &GlobalData) -> Result<Rc<RefCell<Data>>, RuntimeError> {
     let reader = io::stdin();
     let mut buffer: String = String::new();
 
     reader.read_line(&mut buffer).unwrap();
 
-    return rc_ref(Data::StructObject(StructObject::Root(Root {
+    return Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
         _type: AType::from_astruct(gd.root_types.string_type.clone())
             .borrow()
             .to_type_instance(),
         value: RootValue::String(buffer),
-    })));
+    }))));
 }
 
-fn add(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
+fn add(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError> {
     let value = match root!(a).value {
         RootValue::Int(a) => match root!(b).value {
             RootValue::Int(b) => RootValue::Int(a + b),
@@ -91,13 +124,16 @@ fn add(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
         _ => panic!(),
     };
 
-    rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
-    })))
+    }))))
 }
 
-fn subtract(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
+fn subtract(
+    a: &Rc<RefCell<Data>>,
+    b: &Rc<RefCell<Data>>,
+) -> Result<Rc<RefCell<Data>>, RuntimeError> {
     let value = match root!(a).value {
         RootValue::Int(a) => match root!(b).value {
             RootValue::Int(b) => RootValue::Int(a - b),
@@ -110,13 +146,16 @@ fn subtract(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
         _ => panic!(),
     };
 
-    rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
-    })))
+    }))))
 }
 
-fn multiply(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
+fn multiply(
+    a: &Rc<RefCell<Data>>,
+    b: &Rc<RefCell<Data>>,
+) -> Result<Rc<RefCell<Data>>, RuntimeError> {
     let value = match root!(a).value {
         RootValue::Int(a) => match root!(b).value {
             RootValue::Int(b) => RootValue::Int(a * b),
@@ -129,13 +168,13 @@ fn multiply(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
         _ => panic!(),
     };
 
-    rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
-    })))
+    }))))
 }
 
-fn divide(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
+fn divide(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError> {
     let value = match root!(a).value {
         RootValue::Int(a) => match root!(b).value {
             RootValue::Int(b) => RootValue::Int(a / b),
@@ -148,13 +187,13 @@ fn divide(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
         _ => panic!(),
     };
 
-    rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
-    })))
+    }))))
 }
 
-fn modulo(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
+fn modulo(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError> {
     let value = match &root!(a).value {
         RootValue::Int(a) => match root!(b).value {
             RootValue::Int(b) => RootValue::Int(a % b),
@@ -171,13 +210,16 @@ fn modulo(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
         _ => panic!(),
     };
 
-    rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
-    })))
+    }))))
 }
 
-fn exponent(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
+fn exponent(
+    a: &Rc<RefCell<Data>>,
+    b: &Rc<RefCell<Data>>,
+) -> Result<Rc<RefCell<Data>>, RuntimeError> {
     let value = match root!(a).value {
         RootValue::Int(base) => match root!(b).value {
             RootValue::Int(exp) => RootValue::Int(base.pow(exp as u32)),
@@ -190,14 +232,14 @@ fn exponent(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
         _ => panic!(),
     };
 
-    rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
-    })))
+    }))))
 }
 
-fn equal(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
-    let value = match root!(a).value {
+fn equal(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError> {
+    let value = match nroot!(a).value {
         RootValue::Int(a) => match root!(b).value {
             RootValue::Int(b) => RootValue::Bool(a == b),
             _ => panic!(),
@@ -214,15 +256,22 @@ fn equal(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
             RootValue::Bool(b) => RootValue::Bool(a == b),
             _ => panic!(),
         },
+        RootValue::Null => match nroot!(b).value {
+            RootValue::Null => RootValue::Bool(true),
+            _ => panic!(),
+        },
     };
 
-    rc_ref(Data::StructObject(StructObject::Root(Root {
-        _type: root!(a)._type.clone(),
+    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+        _type: nroot!(a)._type.clone(),
         value,
-    })))
+    }))))
 }
 
-fn greater_than(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
+fn greater_than(
+    a: &Rc<RefCell<Data>>,
+    b: &Rc<RefCell<Data>>,
+) -> Result<Rc<RefCell<Data>>, RuntimeError> {
     let value = match root!(a).value {
         RootValue::Int(a) => match root!(b).value {
             RootValue::Int(b) => RootValue::Bool(a > b),
@@ -235,13 +284,16 @@ fn greater_than(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data
         _ => panic!(),
     };
 
-    rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
-    })))
+    }))))
 }
 
-fn greater_than_or_equal(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
+fn greater_than_or_equal(
+    a: &Rc<RefCell<Data>>,
+    b: &Rc<RefCell<Data>>,
+) -> Result<Rc<RefCell<Data>>, RuntimeError> {
     let value = match root!(a).value {
         RootValue::Int(a) => match root!(b).value {
             RootValue::Int(b) => RootValue::Bool(a >= b),
@@ -254,13 +306,16 @@ fn greater_than_or_equal(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<Ref
         _ => panic!(),
     };
 
-    rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
-    })))
+    }))))
 }
 
-fn less_than(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
+fn less_than(
+    a: &Rc<RefCell<Data>>,
+    b: &Rc<RefCell<Data>>,
+) -> Result<Rc<RefCell<Data>>, RuntimeError> {
     let value = match root!(a).value {
         RootValue::Int(a) => match root!(b).value {
             RootValue::Int(b) => RootValue::Bool(a < b),
@@ -273,13 +328,16 @@ fn less_than(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> 
         _ => panic!(),
     };
 
-    rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
-    })))
+    }))))
 }
 
-fn less_than_or_equal(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
+fn less_than_or_equal(
+    a: &Rc<RefCell<Data>>,
+    b: &Rc<RefCell<Data>>,
+) -> Result<Rc<RefCell<Data>>, RuntimeError> {
     let value = match root!(a).value {
         RootValue::Int(a) => match root!(b).value {
             RootValue::Int(b) => RootValue::Bool(a <= b),
@@ -292,25 +350,28 @@ fn less_than_or_equal(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCel
         _ => panic!(),
     };
 
-    rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
-    })))
+    }))))
 }
 
-fn logical_not(a: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
+fn logical_not(a: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError> {
     let value = match root!(a).value {
         RootValue::Bool(a) => RootValue::Bool(!a),
         _ => panic!(),
     };
 
-    rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
-    })))
+    }))))
 }
 
-fn logical_and(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
+fn logical_and(
+    a: &Rc<RefCell<Data>>,
+    b: &Rc<RefCell<Data>>,
+) -> Result<Rc<RefCell<Data>>, RuntimeError> {
     let value = match root!(a).value {
         RootValue::Bool(a) => match root!(b).value {
             RootValue::Bool(b) => RootValue::Bool(a && b),
@@ -319,13 +380,16 @@ fn logical_and(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>
         _ => panic!(),
     };
 
-    rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
-    })))
+    }))))
 }
 
-fn logical_or(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
+fn logical_or(
+    a: &Rc<RefCell<Data>>,
+    b: &Rc<RefCell<Data>>,
+) -> Result<Rc<RefCell<Data>>, RuntimeError> {
     let value = match root!(a).value {
         RootValue::Bool(a) => match root!(b).value {
             RootValue::Bool(b) => RootValue::Bool(a || b),
@@ -334,68 +398,76 @@ fn logical_or(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>>
         _ => panic!(),
     };
 
-    rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
-    })))
+    }))))
 }
 
-fn to_bool(data: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
-    let value = match root!(data).value {
+fn to_bool(data: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError> {
+    let value = match nroot!(data).value {
         RootValue::Bool(b) => RootValue::Bool(b),
         RootValue::Int(i) => RootValue::Bool(i != 0),
         RootValue::Float(f) => RootValue::Bool(f != 0.0),
         RootValue::String(ref s) => RootValue::Bool(!s.is_empty()),
-        _ => panic!(),
+        RootValue::Null => RootValue::Bool(false),
     };
 
-    rc_ref(Data::StructObject(StructObject::Root(Root {
-        _type: root!(data)._type.clone(),
+    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+        _type: nroot!(data)._type.clone(),
         value,
-    })))
+    }))))
 }
 
-fn to_int(data: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
-    let value = match root!(data).value {
+fn to_int(data: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError> {
+    let value = match nroot!(data).value {
         RootValue::Int(i) => RootValue::Int(i),
         RootValue::Float(f) => RootValue::Int(f as i32),
         RootValue::Bool(b) => RootValue::Int(if b { 1 } else { 0 }),
-        RootValue::String(ref s) => RootValue::Int(s.parse::<i32>().unwrap_or(todo!())),
-        _ => panic!(),
+        RootValue::String(ref s) => RootValue::Int(s.parse::<i32>().unwrap_or(Err(RuntimeError(
+            format!("Could not convert '{}' to int.", s),
+            FileLocation::None,
+        ))?)),
+        RootValue::Null => RootValue::Int(0),
     };
 
-    rc_ref(Data::StructObject(StructObject::Root(Root {
-        _type: root!(data)._type.clone(),
+    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+        _type: nroot!(data)._type.clone(),
         value,
-    })))
+    }))))
 }
 
-fn to_float(data: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
-    let value = match root!(data).value {
+fn to_float(data: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError> {
+    let value = match nroot!(data).value {
         RootValue::Float(f) => RootValue::Float(f),
         RootValue::Int(i) => RootValue::Float(i as f32),
         RootValue::Bool(b) => RootValue::Float(if b { 1.0 } else { 0.0 }),
-        RootValue::String(ref s) => RootValue::Float(s.parse::<f32>().unwrap_or(todo!())),
-        _ => panic!(),
+        RootValue::String(ref s) => {
+            RootValue::Float(s.parse::<f32>().unwrap_or(Err(RuntimeError(
+                format!("Could not convert '{}' to float.", s),
+                FileLocation::None,
+            ))?))
+        }
+        RootValue::Null => RootValue::Float(0.0),
     };
 
-    rc_ref(Data::StructObject(StructObject::Root(Root {
-        _type: root!(data)._type.clone(),
+    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+        _type: nroot!(data)._type.clone(),
         value,
-    })))
+    }))))
 }
 
-fn to_string(data: &Rc<RefCell<Data>>) -> Rc<RefCell<Data>> {
-    let value = match root!(data).value {
+fn to_string(data: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError> {
+    let value = match nroot!(data).value {
         RootValue::String(ref s) => RootValue::String(s.clone()),
         RootValue::Int(i) => RootValue::String(i.to_string()),
         RootValue::Float(f) => RootValue::String(f.to_string()),
         RootValue::Bool(b) => RootValue::String(b.to_string()),
-        _ => panic!(),
+        RootValue::Null => RootValue::String("null".to_string()),
     };
 
-    rc_ref(Data::StructObject(StructObject::Root(Root {
-        _type: root!(data)._type.clone(),
+    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+        _type: nroot!(data)._type.clone(),
         value,
-    })))
+    }))))
 }

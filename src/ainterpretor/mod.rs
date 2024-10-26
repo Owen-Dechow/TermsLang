@@ -7,7 +7,6 @@ use crate::{
     active_parser::{
         names as nm, AFunc, AFuncBlock, ALiteral, AObject, AObjectType, AOperandExpression,
         AOperandExpressionValue, AProgram, ARootTypeCollection, AStruct, ATerm, ATermBlock, AType,
-        AVarDef,
     },
     cli::Args,
     errors::RuntimeError,
@@ -59,6 +58,15 @@ impl GlobalData {
             AObjectType::Call(..) => panic!(),
         }
     }
+
+    fn null(&self) -> Rc<RefCell<Data>> {
+        rc_ref(Data::StructObject(StructObject::Root(Root {
+            _type: AType::from_astruct(self.root_types.null_type.clone())
+                .borrow()
+                .to_type_instance(),
+            value: RootValue::Null,
+        })))
+    }
 }
 
 #[derive(Debug)]
@@ -85,7 +93,7 @@ impl Func {
                 }
 
                 match interpret_function(&self.0, Some(&ds), gd, &args)? {
-                    BlockExit::ImplicitNull => Ok(null()),
+                    BlockExit::ImplicitNull => Ok(gd.null()),
                     BlockExit::Explicit(rc) => Ok(rc),
                     _ => panic!(),
                 }
@@ -96,7 +104,6 @@ impl Func {
 
 #[derive(Debug)]
 enum Data {
-    Null,
     StructObject(StructObject),
     ArrayObject(Array),
     FuncDef(Func),
@@ -135,7 +142,6 @@ impl Data {
             }
             Data::ArrayObject(arr) => arr.resolve_aobject(aobject),
             Data::FuncDef(func) => func.resolve_aobject(aobject, connected_instance, ds, gd),
-            Data::Null => todo!(),
             Data::StructDef(..) => panic!(),
         }
     }
@@ -149,11 +155,33 @@ impl Data {
         match *_type.borrow() {
             AType::ArrayObject(..) => Ok(rc_ref(Data::ArrayObject(Array(Vec::new())))),
             AType::StructDefRef(ref astruct) => match astruct.root {
-                true => todo!(),
+                true => {
+                    let data = rc_ref(Data::StructObject(StructObject::Root(Root {
+                        _type: _type.borrow().to_type_instance(),
+                        value: RootValue::Null,
+                    })));
+
+                    let mut func_args = Vec::new();
+                    for arg in args {
+                        func_args.push(interpret_operand_expression(arg, ds, gd)?);
+                    }
+
+                    let mut func_ds = DataScope::new();
+                    func_ds.insert_data(nm::THIS, data.clone());
+
+                    interpret_function(
+                        &astruct.methods[nm::F_NEW],
+                        Some(&func_ds),
+                        gd,
+                        &func_args,
+                    )?;
+
+                    return Ok(data);
+                }
                 false => {
                     let mut data = HashMap::new();
                     for field in &astruct.fields {
-                        data.insert(field.0.clone(), null());
+                        data.insert(field.0.clone(), gd.null());
                     }
 
                     let struct_object = StructObject::User {
@@ -221,7 +249,7 @@ impl StructObject {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Root {
     _type: Rc<RefCell<AType>>,
     value: RootValue,
@@ -255,12 +283,13 @@ impl Root {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum RootValue {
     String(String),
     Int(i32),
     Float(f32),
     Bool(bool),
+    Null,
 }
 
 #[derive(Debug)]
@@ -354,10 +383,6 @@ enum BlockExit {
 
 fn rc_ref<T>(inside: T) -> Rc<RefCell<T>> {
     Rc::new(RefCell::new(inside))
-}
-
-fn null() -> Rc<RefCell<Data>> {
-    rc_ref(Data::Null)
 }
 
 fn interpret_operand_expression(

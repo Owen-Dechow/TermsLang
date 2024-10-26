@@ -1,7 +1,7 @@
 pub const BOOL: &str = "bool";
 pub const INT: &str = "int";
 pub const FLOAT: &str = "float";
-pub const NULL: &str = "null";
+pub const NULL: &str = "@nil";
 pub const STRING: &str = "str";
 
 pub const F_BOOL: &str = "@bool";

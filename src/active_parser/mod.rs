@@ -73,7 +73,7 @@ impl GlobalData {
                 (nm::F_FLOAT, nm::FLOAT, &[]),
                 (nm::F_NEW, nm::NULL, &[]),
                 (nm::F_BOOL, nm::BOOL, &[]),
-                (nm::F_EQ, nm::NULL, &[nm::NULL]),
+                (nm::F_EQ, nm::BOOL, &[nm::NULL]),
             ],
         );
         new.float_type = new.add_root_struct(
@@ -104,10 +104,10 @@ impl GlobalData {
                 (nm::F_INT, nm::INT, &[]),
                 (nm::F_FLOAT, nm::FLOAT, &[]),
                 (nm::F_BOOL, nm::BOOL, &[]),
-                (nm::F_NEW, nm::INT, &[nm::BOOL]),
-                (nm::F_NOT, nm::INT, &[nm::BOOL]),
-                (nm::F_AND, nm::INT, &[nm::BOOL]),
-                (nm::F_OR, nm::INT, &[nm::BOOL]),
+                (nm::F_NEW, nm::INT, &[]),
+                (nm::F_NOT, nm::BOOL, &[]),
+                (nm::F_AND, nm::BOOL, &[]),
+                (nm::F_OR, nm::BOOL, &[]),
             ],
         );
         new.string_type = new.add_root_struct(
@@ -120,7 +120,6 @@ impl GlobalData {
                 (nm::F_NEW, nm::STRING, &[nm::STRING]),
                 (nm::F_LEN, nm::INT, &[]),
                 (nm::F_ADD, nm::STRING, &[nm::STRING]),
-                (nm::F_MULT, nm::STRING, &[nm::INT]),
                 (nm::F_MOD, nm::STRING, &[nm::STRING]),
             ],
         );
@@ -950,7 +949,7 @@ fn aparse_operandexpression(
             let right = AObject::from_object_sub(&object, &left._type.borrow(), ds, gd)?;
 
             Ok(AOperandExpression {
-                _type: right._type.clone(),
+                _type: right.bottom_type().clone(),
                 value: AOperandExpressionValue::Dot {
                     left: Box::new(left),
                     right,
@@ -1022,6 +1021,7 @@ fn aparse_operandexpression(
         }
         OperandExpression::Object(obj) => {
             let a_object = AObject::from_object(obj, ds, gd)?;
+
             return Ok(AOperandExpression {
                 _type: a_object.bottom_type(),
                 value: AOperandExpressionValue::Object(a_object),
@@ -1055,7 +1055,7 @@ fn aparse_operandexpression(
                     args.push(arg);
                 }
 
-                if new_method.args.len() != args.len() {
+                if new_method.args.len() != create.args.args.len() {
                     return Err(AParserError(
                         format!("Invalid number of args to {}.", nm::F_NEW),
                         FileLocation::None,

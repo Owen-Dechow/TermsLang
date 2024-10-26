@@ -14,6 +14,7 @@
         "infn",
         "LTEQ",
         "mult",
+        "nroot",
         "println",
         "readln",
         "struct",
