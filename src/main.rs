@@ -3,7 +3,6 @@ mod ainterpretor;
 mod cli;
 pub mod errors;
 mod formmatter;
-pub mod interpretor;
 pub mod lexer;
 pub mod parser;
 
