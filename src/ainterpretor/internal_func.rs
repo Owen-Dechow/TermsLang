@@ -75,7 +75,7 @@ pub fn interpret_function(
         nm::F_FLOAT => to_float(this(ds)),
         nm::F_STRING => to_string(this(ds)),
         nm::F_NEW => new(this(ds), args.get(0), gd),
-        _ => todo!("Function {} not yet implemented.", func.name),
+        _ => panic!("Function {} not implemented.", func.name),
     };
 
     Ok(BlockExit::Explicit(out?))

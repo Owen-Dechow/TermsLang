@@ -211,7 +211,12 @@ fn parse_term(
                     pos.clone(),
                 ))
             }
-            None => todo!(),
+            None => {
+                return Err(ParserError(
+                    "Expected set operator".to_string(),
+                    FileLocation::End { file: file.clone() },
+                ))
+            }
         }
 
         let value = parse_operand_block(token_stream, vec![TokenType::Terminate], file)?;
