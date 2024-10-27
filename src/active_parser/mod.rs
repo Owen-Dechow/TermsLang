@@ -596,7 +596,7 @@ impl AObject {
             ObjectType::Identity(id) => {
                 let (returntype, args) = match id.as_str() {
                     nm::F_INDEX => (
-                        arr_type,
+                        arr_type.borrow().to_type_defref(),
                         vec![AVarDef {
                             name: String::from("idx"),
                             _type: AType::from_astruct(gd.int_type.clone()),
@@ -606,11 +606,11 @@ impl AObject {
                         AType::from_astruct(gd.null_type.clone()),
                         vec![AVarDef {
                             name: String::from("idx"),
-                            _type: arr_type,
+                            _type: arr_type.borrow().to_type_defref(),
                         }],
                     ),
                     nm::F_REMOVE => (
-                        AType::from_astruct(gd.null_type.clone()),
+                        arr_type.borrow().to_type_defref(),
                         vec![AVarDef {
                             name: String::from("idx"),
                             _type: AType::from_astruct(gd.int_type.clone()),
@@ -629,7 +629,7 @@ impl AObject {
                 let func = AType::FuncDefRef(
                     AFunc {
                         name: id.to_string(),
-                        returntype: returntype.borrow().to_type_defref(),
+                        returntype,
                         block: AFuncBlock::InternalArray,
                         args,
                     }
@@ -668,6 +668,7 @@ impl AObject {
                     name: String::from("idx"),
                     _type: AType::from_astruct(gd.int_type.clone()),
                 }];
+                println!("HERE 2");
 
                 let func = AType::FuncDefRef(
                     AFunc {
@@ -684,9 +685,9 @@ impl AObject {
                 let arg = aparse_operandexpression(operand_expression, ds, gd)?;
 
                 let sub = match &object.sub {
-                    Some(sub) => Some(Box::new(AObject::from_object_sub_function(
+                    Some(sub) => Some(Box::new(AObject::from_object_sub(
                         &sub,
-                        &_type.borrow(),
+                        &returntype.borrow(),
                         ds,
                         gd,
                     )?)),

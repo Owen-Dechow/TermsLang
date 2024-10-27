@@ -1,13 +1,7 @@
 ""
 
-struct t {
-    let int v ~
-}
-
-func @nil b: int n {
-    updt n -= 1 ~
-}
-
-func str @main: str[] args {
-    println (1 + ($() t).v).@str.() ~
+func null @main: str[] args {
+    loop i: i < 3000000 {
+        cll i + i ~
+    }
 }

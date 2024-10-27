@@ -1,8 +1,6 @@
-mod array_internal;
-mod internal_func;
+mod internal_funcs;
 
-use std::{cell::RefCell, collections::HashMap, iter::zip, rc::Rc};
-
+use crate::rc_ref;
 use crate::{
     active_parser::{
         names as nm, AFunc, AFuncBlock, ALiteral, AObject, AObjectType, AOperandExpression,
@@ -11,6 +9,7 @@ use crate::{
     cli::Args,
     errors::RuntimeError,
 };
+use std::{cell::RefCell, collections::HashMap, iter::zip, rc::Rc};
 
 struct GlobalData {
     structs: HashMap<String, Rc<AStruct>>,
@@ -43,14 +42,14 @@ impl GlobalData {
             AObjectType::Identity(id) => match self.structs.get(id) {
                 Some(_struct) => match aobject.sub {
                     Some(_) => panic!(),
-                    None => Ok(rc_ref(Data::StructDef(_struct.clone()))),
+                    None => Ok(rc_ref!(Data::StructDef(_struct.clone()))),
                 },
                 None => match self.functions.get(id) {
                     Some(func) => match &aobject.sub {
                         Some(sub) => {
                             Data::FuncDef(Func(func.clone())).resolve_aobject(&sub, None, ds, self)
                         }
-                        None => Ok(rc_ref(Data::FuncDef(Func(func.clone())))),
+                        None => Ok(rc_ref!(Data::FuncDef(Func(func.clone())))),
                     },
                     None => panic!(),
                 },
@@ -60,7 +59,7 @@ impl GlobalData {
     }
 
     fn null(&self) -> Rc<RefCell<Data>> {
-        rc_ref(Data::StructObject(StructObject::Root(Root {
+        rc_ref!(Data::StructObject(StructObject::Root(Root {
             _type: AType::from_astruct(self.root_types.null_type.clone())
                 .borrow()
                 .to_type_instance(),
@@ -74,12 +73,12 @@ struct Func(Rc<AFunc>);
 impl Func {
     fn resolve_aobject(
         &self,
-        object: &AObject,
+        aobject: &AObject,
         connected_instance: Option<Rc<RefCell<Data>>>,
         ds: &DataScope,
         gd: &GlobalData,
     ) -> Result<Rc<RefCell<Data>>, RuntimeError> {
-        match &object.kind {
+        match &aobject.kind {
             AObjectType::Identity(..) => panic!(),
             AObjectType::Call(acall) => {
                 let mut args = Vec::new();
@@ -87,16 +86,25 @@ impl Func {
                     args.push(interpret_operand_expression(&arg, ds, gd)?);
                 }
 
-                let mut ds = DataScope::new();
+                let mut func_ds = DataScope::new();
                 if let Some(inst) = connected_instance {
-                    ds.insert_data(nm::THIS, inst);
+                    func_ds.insert_data(nm::THIS, inst);
                 }
 
-                match interpret_function(&self.0, Some(&ds), gd, &args)? {
-                    BlockExit::ImplicitNull => Ok(gd.null()),
-                    BlockExit::Explicit(rc) => Ok(rc),
+                let result = match interpret_function(&self.0, Some(&func_ds), gd, &args)? {
+                    BlockExit::ImplicitNull => gd.null(),
+                    BlockExit::Explicit(rc) => rc,
                     _ => panic!(),
-                }
+                };
+
+                return match &aobject.sub {
+                    Some(sub) => {
+                        result
+                            .borrow()
+                            .resolve_aobject(&sub, Some(result.clone()), &ds, gd)
+                    }
+                    None => Ok(result),
+                };
             }
         }
     }
@@ -126,7 +134,7 @@ impl Data {
             value,
         }));
 
-        return rc_ref(data);
+        return rc_ref!(data);
     }
 
     fn resolve_aobject(
@@ -140,7 +148,7 @@ impl Data {
             Data::StructObject(struct_object) => {
                 struct_object.resolve_aobject(aobject, connected_instance, ds, gd)
             }
-            Data::ArrayObject(arr) => arr.resolve_aobject(aobject),
+            Data::ArrayObject(arr) => arr.resolve_aobject(aobject, connected_instance, ds, gd),
             Data::FuncDef(func) => func.resolve_aobject(aobject, connected_instance, ds, gd),
             Data::StructDef(..) => panic!(),
         }
@@ -153,10 +161,10 @@ impl Data {
         gd: &GlobalData,
     ) -> Result<Rc<RefCell<Self>>, RuntimeError> {
         match *_type.borrow() {
-            AType::ArrayObject(..) => Ok(rc_ref(Data::ArrayObject(Array(Vec::new())))),
+            AType::ArrayObject(..) => Ok(rc_ref!(Data::ArrayObject(Array(rc_ref!(Vec::new()))))),
             AType::StructDefRef(ref astruct) => match astruct.root {
                 true => {
-                    let data = rc_ref(Data::StructObject(StructObject::Root(Root {
+                    let data = rc_ref!(Data::StructObject(StructObject::Root(Root {
                         _type: _type.borrow().to_type_instance(),
                         value: RootValue::Null,
                     })));
@@ -189,7 +197,7 @@ impl Data {
                         data,
                     };
 
-                    let data = rc_ref(Data::StructObject(struct_object));
+                    let data = rc_ref!(Data::StructObject(struct_object));
 
                     if let Some(func) = astruct.methods.get(nm::F_NEW) {
                         let mut func_ds = DataScope::new();
@@ -237,9 +245,13 @@ impl StructObject {
                         None => Ok(func.clone()),
                     },
                     None => match &aobject.sub {
-                        Some(sub) => Data::FuncDef(Func(_type.methods[id].clone()))
-                            .resolve_aobject(&sub, connected_instance, ds, gd),
-                        None => Ok(rc_ref(Data::FuncDef(Func(_type.methods[id].clone())))),
+                        Some(sub) => Func(_type.methods[id].clone()).resolve_aobject(
+                            &sub,
+                            connected_instance,
+                            ds,
+                            gd,
+                        ),
+                        None => Ok(rc_ref!(Data::FuncDef(Func(_type.methods[id].clone())))),
                     },
                 },
                 AObjectType::Call(..) => panic!(),
@@ -269,13 +281,11 @@ impl Root {
                     _ => panic!("{:?}", self),
                 };
 
-                let data = rc_ref(Data::FuncDef(Func(func)));
+                let func = Func(func);
 
                 match &aobject.sub {
-                    Some(sub) => data
-                        .borrow()
-                        .resolve_aobject(&sub, connected_instance, ds, gd),
-                    None => Ok(data),
+                    Some(sub) => func.resolve_aobject(&sub, connected_instance, ds, gd),
+                    None => Ok(rc_ref!(Data::FuncDef(func))),
                 }
             }
             AObjectType::Call(..) => panic!(),
@@ -293,12 +303,25 @@ enum RootValue {
 }
 
 #[derive(Debug)]
-struct Array(Vec<Rc<RefCell<Data>>>);
+struct Array(Rc<RefCell<Vec<Rc<RefCell<Data>>>>>);
 impl Array {
-    fn resolve_aobject(&self, aobject: &AObject) -> Result<Rc<RefCell<Data>>, RuntimeError> {
-        match &aobject.kind {
-            AObjectType::Identity(id) => todo!(),
-            AObjectType::Call(..) => panic!(),
+    fn resolve_aobject(
+        &self,
+        aobject: &AObject,
+        connected_instance: Option<Rc<RefCell<Data>>>,
+        ds: &DataScope,
+        gd: &GlobalData,
+    ) -> Result<Rc<RefCell<Data>>, RuntimeError> {
+        let func = match *aobject._type.borrow() {
+            AType::FuncDefRef(ref func) => func.clone(),
+            _ => panic!(),
+        };
+
+        let data = Data::FuncDef(Func(func));
+
+        match &aobject.sub {
+            Some(sub) => data.resolve_aobject(&sub, connected_instance, ds, gd),
+            None => Ok(rc_ref!(data)),
         }
     }
 }
@@ -352,26 +375,6 @@ impl<'a> DataScope<'a> {
             _ => panic!(),
         }
     }
-
-    // fn keys(&self) -> String {
-    //     return match self.parent {
-    //         Some(p) => format!(
-    //             "{} + {}",
-    //             self.data
-    //                 .keys()
-    //                 .map(|x| x.to_owned())
-    //                 .collect::<Vec<String>>()
-    //                 .join(", "),
-    //             p.keys()
-    //         ),
-    //         None => self
-    //             .data
-    //             .keys()
-    //             .map(|x| x.to_owned())
-    //             .collect::<Vec<String>>()
-    //             .join(", "),
-    //     };
-    // }
 }
 
 enum BlockExit {
@@ -381,8 +384,11 @@ enum BlockExit {
     Explicit(Rc<RefCell<Data>>),
 }
 
-fn rc_ref<T>(inside: T) -> Rc<RefCell<T>> {
-    Rc::new(RefCell::new(inside))
+#[macro_export]
+macro_rules! rc_ref {
+    ($inside:expr) => {
+        Rc::new(RefCell::new($inside))
+    };
 }
 
 fn interpret_operand_expression(
@@ -476,7 +482,7 @@ fn interpret_termblock(
                 conditional,
                 block,
             } => {
-                let counter_var = rc_ref(Data::StructObject(StructObject::Root(Root {
+                let counter_var = rc_ref!(Data::StructObject(StructObject::Root(Root {
                     _type: AType::from_astruct(gd.root_types.int_type.clone())
                         .borrow()
                         .to_type_instance(),
@@ -545,9 +551,11 @@ fn interpret_function(
     ds.add_arglist(args, func);
 
     return match &func.block {
-        AFuncBlock::Internal => internal_func::interpret_function(func, parent_ds, gd, args),
+        AFuncBlock::Internal => internal_funcs::interpret_function(func, parent_ds, gd, args),
         AFuncBlock::TermsLang(termblock) => interpret_termblock(&termblock.borrow(), &ds, gd),
-        AFuncBlock::InternalArray => array_internal::interpret_function(func, parent_ds, gd, args),
+        AFuncBlock::InternalArray => {
+            internal_funcs::array_internals::interpret_function(func, parent_ds, gd, args)
+        }
     };
 }
 
@@ -563,21 +571,20 @@ pub fn interpret(program: AProgram, args: Args) -> Result<(), RuntimeError> {
     }
 
     if let Some(main) = gd.functions.get(nm::F_MAIN) {
-        let commandline_args = Array(
-            args.args
-                .into_iter()
-                .map(|x| {
-                    rc_ref(Data::StructObject(StructObject::Root(Root {
-                        _type: AType::from_astruct(gd.root_types.string_type.clone())
-                            .borrow()
-                            .to_type_instance(),
-                        value: RootValue::String(x),
-                    })))
-                })
-                .collect(),
-        );
+        let commandline_args = Array(rc_ref!(args
+            .args
+            .into_iter()
+            .map(|x| {
+                rc_ref!(Data::StructObject(StructObject::Root(Root {
+                    _type: AType::from_astruct(gd.root_types.string_type.clone())
+                        .borrow()
+                        .to_type_instance(),
+                    value: RootValue::String(x),
+                })))
+            })
+            .collect()));
 
-        let args = rc_ref(Data::ArrayObject(commandline_args));
+        let args = rc_ref!(Data::ArrayObject(commandline_args));
 
         interpret_function(&main, None, &gd, &[args])?;
     }

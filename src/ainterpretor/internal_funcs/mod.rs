@@ -1,11 +1,14 @@
+pub mod array_internals;
+
 use std::{cell::RefCell, io, rc::Rc};
 
 use crate::{
     active_parser::{names as nm, AFunc, AType},
     errors::{FileLocation, RuntimeError},
+    rc_ref,
 };
 
-use super::{rc_ref, BlockExit, Data, DataScope, GlobalData, Root, RootValue, StructObject};
+use super::{BlockExit, Data, DataScope, GlobalData, Root, RootValue, StructObject};
 
 macro_rules! root {
     ($data:expr) => {{
@@ -99,7 +102,7 @@ fn readln(gd: &GlobalData) -> Result<Rc<RefCell<Data>>, RuntimeError> {
 
     reader.read_line(&mut buffer).unwrap();
 
-    return Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+    return Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
         _type: AType::from_astruct(gd.root_types.string_type.clone())
             .borrow()
             .to_type_instance(),
@@ -124,7 +127,7 @@ fn add(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>
         _ => panic!(),
     };
 
-    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
     }))))
@@ -146,7 +149,7 @@ fn subtract(
         _ => panic!(),
     };
 
-    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
     }))))
@@ -168,7 +171,7 @@ fn multiply(
         _ => panic!(),
     };
 
-    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
     }))))
@@ -187,7 +190,7 @@ fn divide(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Dat
         _ => panic!(),
     };
 
-    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
     }))))
@@ -210,7 +213,7 @@ fn modulo(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Dat
         _ => panic!(),
     };
 
-    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
     }))))
@@ -232,7 +235,7 @@ fn exponent(
         _ => panic!(),
     };
 
-    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
     }))))
@@ -262,7 +265,7 @@ fn equal(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data
         },
     };
 
-    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
         _type: nroot!(a)._type.clone(),
         value,
     }))))
@@ -284,7 +287,7 @@ fn greater_than(
         _ => panic!(),
     };
 
-    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
     }))))
@@ -306,7 +309,7 @@ fn greater_than_or_equal(
         _ => panic!(),
     };
 
-    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
     }))))
@@ -328,7 +331,7 @@ fn less_than(
         _ => panic!(),
     };
 
-    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
     }))))
@@ -350,7 +353,7 @@ fn less_than_or_equal(
         _ => panic!(),
     };
 
-    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
     }))))
@@ -362,7 +365,7 @@ fn logical_not(a: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError>
         _ => panic!(),
     };
 
-    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
     }))))
@@ -380,7 +383,7 @@ fn logical_and(
         _ => panic!(),
     };
 
-    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
     }))))
@@ -398,7 +401,7 @@ fn logical_or(
         _ => panic!(),
     };
 
-    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
         _type: root!(a)._type.clone(),
         value,
     }))))
@@ -413,7 +416,7 @@ fn to_bool(data: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError> 
         RootValue::Null => RootValue::Bool(false),
     };
 
-    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
         _type: nroot!(data)._type.clone(),
         value,
     }))))
@@ -431,7 +434,7 @@ fn to_int(data: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError> {
         RootValue::Null => RootValue::Int(0),
     };
 
-    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
         _type: nroot!(data)._type.clone(),
         value,
     }))))
@@ -451,7 +454,7 @@ fn to_float(data: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError>
         RootValue::Null => RootValue::Float(0.0),
     };
 
-    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
         _type: nroot!(data)._type.clone(),
         value,
     }))))
@@ -466,7 +469,7 @@ fn to_string(data: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError
         RootValue::Null => RootValue::String("null".to_string()),
     };
 
-    Ok(rc_ref(Data::StructObject(StructObject::Root(Root {
+    Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
         _type: nroot!(data)._type.clone(),
         value,
     }))))
