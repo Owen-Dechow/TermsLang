@@ -462,8 +462,9 @@ fn parse_func(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Function
     };
 
     // Burn identity arg separator in function signiture
-    match token_stream.advance() {
-        Some(Token(TokenType::Operator(Operator::Colon), _)) => {}
+    let args = match token_stream.advance() {
+        Some(Token(TokenType::Operator(Operator::Colon), _)) => true,
+        Some(Token(TokenType::Operator(Operator::OpenBlock), _)) => false,
         Some(token) => {
             return Err(ParserError(
                 "Unexpected token in function signiture".to_string(),
@@ -479,57 +480,60 @@ fn parse_func(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Function
     };
 
     // Get normal args of function
-    let args = {
-        // Create arg list
-        let mut args = Vec::<VarSigniture>::new();
+    let args = match args {
+        true => {
+            // Create arg list
+            let mut args = Vec::<VarSigniture>::new();
 
-        // Loop until end of arg list found
-        loop {
-            //  Ensure token exits else return syntax error
-            let token = match token_stream.advance() {
-                Some(token) => token,
-                None => {
-                    return Err(ParserError(
-                        "Expected function body".to_string(),
-                        FileLocation::End { file: file.clone() },
-                    ))
+            // Loop until end of arg list found
+            loop {
+                //  Ensure token exits else return syntax error
+                let token = match token_stream.advance() {
+                    Some(token) => token,
+                    None => {
+                        return Err(ParserError(
+                            "Expected function body".to_string(),
+                            FileLocation::End { file: file.clone() },
+                        ))
+                    }
+                };
+
+                // If state of function block found exit loop
+                if let Token(TokenType::Operator(Operator::OpenBlock), _) = token {
+                    break;
                 }
-            };
 
-            // If state of function block found exit loop
-            if let Token(TokenType::Operator(Operator::OpenBlock), _) = token {
-                break;
+                // Roll token stream back to start of arg declaration
+                token_stream.back();
+
+                let var_sig = parse_type::parse_var_sig(token_stream, file)?;
+
+                // Parse argument and add to arg list
+                args.push(var_sig.clone());
+
+                // Check if arg list continues or start of block found else return syntax error
+                match token_stream.advance() {
+                    Some(Token(TokenType::Operator(Operator::OpenBlock), _)) => break,
+                    Some(Token(TokenType::Operator(Operator::Comma), _)) => continue,
+                    Some(token) => {
+                        return Err(ParserError(
+                            "Unexpected token in function signiture".to_string(),
+                            token.1.clone(),
+                        ))
+                    }
+                    None => {
+                        return Err(ParserError(
+                            "Expected function body".to_string(),
+                            FileLocation::End { file: file.clone() },
+                        ))
+                    }
+                }
             }
 
-            // Roll token stream back to start of arg declaration
-            token_stream.back();
-
-            let var_sig = parse_type::parse_var_sig(token_stream, file)?;
-
-            // Parse argument and add to arg list
-            args.push(var_sig.clone());
-
-            // Check if arg list continues or start of block found else return syntax error
-            match token_stream.advance() {
-                Some(Token(TokenType::Operator(Operator::OpenBlock), _)) => break,
-                Some(Token(TokenType::Operator(Operator::Comma), _)) => continue,
-                Some(token) => {
-                    return Err(ParserError(
-                        "Unexpected token in function signiture".to_string(),
-                        token.1.clone(),
-                    ))
-                }
-                None => {
-                    return Err(ParserError(
-                        "Expected function body".to_string(),
-                        FileLocation::End { file: file.clone() },
-                    ))
-                }
-            }
+            // return arg list
+            args
         }
-
-        // return arg list
-        args
+        false => Vec::new(),
     };
 
     // Roll back to beginning of function block
