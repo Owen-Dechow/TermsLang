@@ -122,6 +122,7 @@ impl GlobalData {
                 (nm::F_LEN, nm::INT, &[]),
                 (nm::F_ADD, nm::STRING, &[nm::STRING]),
                 (nm::F_MOD, nm::STRING, &[nm::STRING]),
+                (nm::F_EQ, nm::BOOL, &[nm::STRING]),
             ],
         );
 
@@ -947,7 +948,7 @@ impl ReturnOpts {
 
     fn requirement_free_opts(&self) -> Self {
         let mut new = self.clone();
-        new.loop_returns = true;
+        new.require_explicit = false;
         return new;
     }
 }
@@ -1337,6 +1338,7 @@ fn aparse_termblock(
             Some(Term::Return { .. } | Term::If { .. }) => {}
             _ => {
                 if !return_opts.expected_type.borrow().is_nulldef(gd) {
+                    println!("{:?}", block.terms.last());
                     return Err(AParserError(
                         format!("Not all paths return correct type"),
                         FileLocation::None,
