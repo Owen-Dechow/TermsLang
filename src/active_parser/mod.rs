@@ -1,7 +1,6 @@
 pub mod names;
 
 use names as nm;
-use rand::random;
 
 use crate::{
     errors::{AParserError, FileLocation},
@@ -342,7 +341,7 @@ pub enum AType {
     StructObject(Rc<AStruct>),
     StructDefRef(Rc<AStruct>),
     FuncDefRef(Rc<AFunc>),
-    NotYetDefined(Type, i32, bool),
+    NotYetDefined(Type, bool),
 }
 impl AType {
     fn from_type_nyd(value: &Type, gd: &mut GlobalData) -> Rc<RefCell<Self>> {
@@ -351,7 +350,7 @@ impl AType {
             Type::Object { object } => match &object.kind {
                 ObjectType::Identity(id) => match gd.structs.get(id) {
                     Some(_type) => AType::StructDefRef(_type.to_owned()),
-                    None => AType::NotYetDefined(value.clone(), random(), false),
+                    None => AType::NotYetDefined(value.clone(), false),
                 },
                 _ => panic!("Should be identity"),
             },
@@ -432,12 +431,8 @@ impl AType {
             AType::ArrayObject(arr_type) => {
                 RefCell::new(AType::ArrayObject(arr_type.borrow().to_type_instance())).into()
             }
-            AType::NotYetDefined(_type, _, false) => {
-                let new = Rc::new(RefCell::new(AType::NotYetDefined(
-                    _type.clone(),
-                    random(),
-                    true,
-                )));
+            AType::NotYetDefined(_type, false) => {
+                let new = Rc::new(RefCell::new(AType::NotYetDefined(_type.clone(), true)));
                 gd.not_yet_defined.push(new.clone());
 
                 return new;
@@ -468,8 +463,8 @@ impl Debug for AType {
             Self::StructObject(arg0) => f.debug_tuple(&format!("$({})", arg0.name)).finish(),
             Self::StructDefRef(arg0) => f.debug_tuple(&format!("{}", arg0.name)).finish(),
             Self::FuncDefRef(arg0) => f.debug_tuple(&format!("func({})", arg0.name)).finish(),
-            Self::NotYetDefined(arg0, r, t) => f
-                .debug_tuple(&format!("NotYetDefined({:?}, {t}, {r})", arg0))
+            Self::NotYetDefined(arg0, t) => f
+                .debug_tuple(&format!("NotYetDefined({:?}, {t})", arg0))
                 .finish(),
         }
     }
@@ -1457,7 +1452,7 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
     // Fix undefined refs
     for undefined in gd.not_yet_defined.clone() {
         let mut a_type_op = None;
-        if let AType::NotYetDefined(ref _type, _, instance) = *undefined.borrow() {
+        if let AType::NotYetDefined(ref _type, instance) = *undefined.borrow() {
             let a_type = AType::from_type_nyd(_type, &mut gd);
 
             match *a_type.borrow() {
