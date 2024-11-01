@@ -2,6 +2,6 @@
 
 import "fib.tms" ~
 
-func int @main: str[] args {
-    println fib.(20).@str.() ~
-}
+# func int @main: str[] args {
+#     println fib.(20).@str.() ~
+# }

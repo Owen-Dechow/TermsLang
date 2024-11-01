@@ -1333,7 +1333,6 @@ fn aparse_termblock(
             Some(Term::Return { .. } | Term::If { .. }) => {}
             _ => {
                 if !return_opts.expected_type.borrow().is_nulldef(gd) {
-                    println!("{:?}", block.terms.last());
                     return Err(AParserError(
                         format!("Not all paths return correct type"),
                         FileLocation::None,
