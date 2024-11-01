@@ -35,7 +35,7 @@ macro_rules! nroot {
         match *$data.borrow() {
             Data::StructObject(ref struct_object) => match struct_object {
                 StructObject::Root(ref root) => root,
-                _ => panic!(),
+                _ => panic!("NOT A ROOT"),
             },
             _ => panic!(),
         }

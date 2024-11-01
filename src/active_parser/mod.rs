@@ -1,6 +1,7 @@
 pub mod names;
 
 use names as nm;
+use rand::random;
 
 use crate::{
     errors::{AParserError, FileLocation},
@@ -144,9 +145,9 @@ impl GlobalData {
 
     fn add_root_struct(&mut self, name: &str, funcs: &[(&str, &str, &[&str])]) -> Rc<AStruct> {
         let mut a_funcs = HashMap::new();
-        for func in funcs {
+        for (func_name, func_return, func_args) in funcs {
             let mut args = Vec::new();
-            for arg in func.2 {
+            for arg in *func_args {
                 let a_arg = AVarDef {
                     name: String::new(),
                     _type: self.create_forward_ref(arg),
@@ -156,13 +157,13 @@ impl GlobalData {
             }
 
             let a_func = AFunc {
-                name: func.0.to_string(),
-                returntype: self.create_forward_ref(func.1),
+                name: func_name.to_string(),
+                returntype: self.create_forward_ref(&func_return),
                 block: AFuncBlock::Internal,
                 args,
             };
 
-            a_funcs.insert(func.0.to_string(), a_func.into());
+            a_funcs.insert(func_name.to_string(), a_func.into());
         }
 
         let a_struct = Rc::new(AStruct {
@@ -340,7 +341,7 @@ pub enum AType {
     StructObject(Rc<AStruct>),
     StructDefRef(Rc<AStruct>),
     FuncDefRef(Rc<AFunc>),
-    NotYetDefined(Type),
+    NotYetDefined(Type, i32, bool),
 }
 impl AType {
     fn from_type_nyd(value: &Type, gd: &mut GlobalData) -> Rc<RefCell<Self>> {
@@ -349,7 +350,7 @@ impl AType {
             Type::Object { object } => match &object.kind {
                 ObjectType::Identity(id) => match gd.structs.get(id) {
                     Some(_type) => AType::StructDefRef(_type.to_owned()),
-                    None => AType::NotYetDefined(value.clone()),
+                    None => AType::NotYetDefined(value.clone(), random(), false),
                 },
                 _ => panic!("Should be identity"),
             },
@@ -376,15 +377,19 @@ impl AType {
         return RefCell::new(AType::StructObject(a_struct)).into();
     }
 
-    fn structdefref_is_instance(&self, inst: &Self) -> bool {
+    fn structdefref_is_instance(&self, inst: &Self) -> Result<bool, AParserError> {
         match (self, inst) {
             (AType::StructDefRef(defref), AType::StructObject(object)) => {
-                Rc::ptr_eq(defref, object)
+                Ok(Rc::ptr_eq(defref, object))
             }
             (AType::ArrayObject(arr_type), AType::ArrayObject(object)) => {
                 arr_type.borrow().structdefref_is_instance(&object.borrow())
             }
-            (AType::ArrayObject(..), AType::StructObject(..)) => false,
+            (AType::ArrayObject(..), AType::StructObject(..)) => Ok(false),
+            (AType::StructDefRef(..), AType::StructDefRef(astruct)) => Err(AParserError(
+                format!("{:?} is a type definition not an instance", astruct.name),
+                FileLocation::None,
+            )),
             _ => panic!(
                 "Bad StructDefRef Is Instance Check:\n - self: {:?}\n - inst: {:?}",
                 self, inst
@@ -416,7 +421,27 @@ impl AType {
             AType::ArrayObject(arr_type) => {
                 RefCell::new(AType::ArrayObject(arr_type.borrow().to_type_instance())).into()
             }
-            _ => panic!(),
+            _ => panic!("{self:?}"),
+        }
+    }
+
+    fn to_type_instance_nyd(&self, gd: &mut GlobalData) -> Rc<RefCell<Self>> {
+        match self {
+            AType::StructDefRef(rc) => RefCell::new(AType::StructObject(rc.clone())).into(),
+            AType::ArrayObject(arr_type) => {
+                RefCell::new(AType::ArrayObject(arr_type.borrow().to_type_instance())).into()
+            }
+            AType::NotYetDefined(_type, _, false) => {
+                let new = Rc::new(RefCell::new(AType::NotYetDefined(
+                    _type.clone(),
+                    random(),
+                    true,
+                )));
+                gd.not_yet_defined.push(new.clone());
+
+                return new;
+            }
+            _ => panic!("{self:?}"),
         }
     }
 
@@ -442,7 +467,9 @@ impl Debug for AType {
             Self::StructObject(arg0) => f.debug_tuple(&format!("$({})", arg0.name)).finish(),
             Self::StructDefRef(arg0) => f.debug_tuple(&format!("{}", arg0.name)).finish(),
             Self::FuncDefRef(arg0) => f.debug_tuple(&format!("func({})", arg0.name)).finish(),
-            Self::NotYetDefined(..) => f.debug_tuple("NotYetDefined").finish(),
+            Self::NotYetDefined(arg0, r, t) => f
+                .debug_tuple(&format!("NotYetDefined({:?}, {t}, {r})", arg0))
+                .finish(),
         }
     }
 }
@@ -501,7 +528,7 @@ impl AObject {
                 ))
             }
             AType::FuncDefRef(_) => AObject::from_object_sub_function(object, parent_type, ds, gd),
-            _ => panic!(),
+            _ => panic!("{:?}", parent_type),
         }
     }
 
@@ -551,7 +578,7 @@ impl AObject {
             if !expected_type
                 ._type
                 .borrow()
-                .structdefref_is_instance(&a_arg._type.borrow())
+                .structdefref_is_instance(&a_arg._type.borrow())?
             {
                 return Err(AParserError(
                     format!("Missmatched Types (3)"),
@@ -562,10 +589,12 @@ impl AObject {
             acall.args.push(a_arg);
         }
 
+        let returntype = func.returntype.borrow().to_type_instance();
+
         let sub = if let Some(sub) = &object.sub {
             Some(Box::new(AObject::from_object_sub(
                 sub,
-                &func.returntype.borrow().to_type_instance().borrow(),
+                &returntype.borrow(),
                 ds,
                 gd,
             )?))
@@ -576,7 +605,7 @@ impl AObject {
         Ok(AObject {
             kind: AObjectType::Call(acall),
             sub,
-            _type: func.returntype.borrow().to_type_instance(),
+            _type: returntype,
             loc: object.loc.clone(),
         })
     }
@@ -668,7 +697,6 @@ impl AObject {
                     name: String::from("idx"),
                     _type: AType::from_astruct(gd.int_type.clone()),
                 }];
-                println!("HERE 2");
 
                 let func = AType::FuncDefRef(
                     AFunc {
@@ -906,7 +934,7 @@ impl AStruct {
 
 #[derive(Clone)]
 struct ReturnOpts {
-    expected_type: Option<Rc<RefCell<AType>>>,
+    expected_type: Rc<RefCell<AType>>,
     loop_returns: bool,
     require_explicit: bool,
 }
@@ -1045,7 +1073,7 @@ fn aparse_operandexpression(
                     if !argdef
                         ._type
                         .borrow()
-                        .structdefref_is_instance(&arg._type.borrow())
+                        .structdefref_is_instance(&arg._type.borrow())?
                     {
                         return Err(AParserError(
                             format!("Invalid arg to {}.", nm::F_NEW),
@@ -1103,7 +1131,7 @@ fn aparse_termblock(
 
                 if !AType::from_astruct(gd.string_type.clone())
                     .borrow()
-                    .structdefref_is_instance(&value._type.borrow())
+                    .structdefref_is_instance(&value._type.borrow())?
                 {
                     return Err(AParserError(
                         "Cannot print non string objects.".to_string(),
@@ -1123,7 +1151,7 @@ fn aparse_termblock(
 
                 if !a_type
                     .borrow()
-                    .structdefref_is_instance(&a_value._type.borrow())
+                    .structdefref_is_instance(&a_value._type.borrow())?
                 {
                     return Err(AParserError(
                         format!("Missmatched types (0)"),
@@ -1142,10 +1170,17 @@ fn aparse_termblock(
             }
             Term::Return { value } => {
                 let value = aparse_operandexpression(value, &ds, gd)?;
-                if let Some(expected_type) = &return_opts.expected_type {
-                    if !expected_type
+                if !return_opts
+                    .expected_type
+                    .borrow()
+                    .structdefref_is_instance(&value._type.borrow())?
+                {
+                    if !value
+                        ._type
                         .borrow()
-                        .structdefref_is_instance(&value._type.borrow())
+                        .to_type_defref()
+                        .borrow()
+                        .is_nulldef(gd)
                     {
                         return Err(AParserError(
                             format!("Missmatched types (1)"),
@@ -1297,6 +1332,20 @@ fn aparse_termblock(
         a_terms.push(a_term);
     }
 
+    if return_opts.require_explicit {
+        match block.terms.last() {
+            Some(Term::Return { .. } | Term::If { .. }) => {}
+            _ => {
+                if !return_opts.expected_type.borrow().is_nulldef(gd) {
+                    return Err(AParserError(
+                        format!("Not all paths return correct type"),
+                        FileLocation::None,
+                    ));
+                }
+            }
+        }
+    }
+
     return Ok(ATermBlock::A { terms: a_terms });
 }
 
@@ -1324,7 +1373,8 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
             let name = prop.identity.clone();
             let _type = AType::from_type_nyd(&prop.argtype, &mut gd)
                 .borrow()
-                .to_type_instance();
+                .to_type_instance_nyd(&mut gd);
+
             let field = AVarDef { name, _type };
             fields.insert(field.name.to_owned(), field);
         }
@@ -1402,9 +1452,10 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
         functions.push(a_func);
     }
 
+    // Fix undefined refs
     for undefined in gd.not_yet_defined.clone() {
         let mut a_type_op = None;
-        if let AType::NotYetDefined(ref _type) = *undefined.borrow() {
+        if let AType::NotYetDefined(ref _type, _, instance) = *undefined.borrow() {
             let a_type = AType::from_type_nyd(_type, &mut gd);
 
             match *a_type.borrow() {
@@ -1417,7 +1468,10 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
                 _ => gd.not_yet_defined.remove(0),
             };
 
-            a_type_op = Some(a_type)
+            a_type_op = match instance {
+                false => Some(a_type),
+                true => Some(a_type.borrow().to_type_instance()),
+            };
         }
 
         if let Some(a_type) = a_type_op {
@@ -1425,22 +1479,15 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
         }
     }
 
+    // Fix unfinished functions
     for (_name, func) in &gd.functions {
         let mut new_a_termblock = None;
         if let AFuncBlock::TermsLang(ref a_termblock) = func.block {
             if let ATermBlock::NotYetEvaluated(ref block) = *a_termblock.borrow() {
-                let return_specs = if func.returntype.borrow().is_nulldef(&gd) {
-                    ReturnOpts {
-                        expected_type: None,
-                        loop_returns: false,
-                        require_explicit: false,
-                    }
-                } else {
-                    ReturnOpts {
-                        expected_type: Some(func.returntype.clone()),
-                        loop_returns: false,
-                        require_explicit: false,
-                    }
+                let return_specs = ReturnOpts {
+                    expected_type: func.returntype.clone(),
+                    loop_returns: false,
+                    require_explicit: true,
                 };
                 new_a_termblock = Some(aparse_termblock(
                     block,
@@ -1458,23 +1505,16 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
         }
     }
 
+    // Fix unfinished methods
     for (_name, _struct) in &gd.structs {
         for (_name, func) in &_struct.methods {
             let mut new_a_termblock = None;
             if let AFuncBlock::TermsLang(ref a_termblock) = func.block {
                 if let ATermBlock::NotYetEvaluated(ref block) = *a_termblock.borrow() {
-                    let return_specs = if func.returntype.borrow().is_nulldef(&gd) {
-                        ReturnOpts {
-                            expected_type: None,
-                            loop_returns: false,
-                            require_explicit: false,
-                        }
-                    } else {
-                        ReturnOpts {
-                            expected_type: Some(func.returntype.clone()),
-                            loop_returns: false,
-                            require_explicit: false,
-                        }
+                    let return_specs = ReturnOpts {
+                        expected_type: func.returntype.clone(),
+                        loop_returns: false,
+                        require_explicit: true,
                     };
                     new_a_termblock = Some(aparse_termblock(
                         block,

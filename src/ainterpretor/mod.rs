@@ -44,14 +44,12 @@ impl GlobalData {
                     Some(_) => panic!(),
                     None => Ok(rc_ref!(Data::StructDef(_struct.clone()))),
                 },
-                None => match self.functions.get(id) {
-                    Some(func) => match &aobject.sub {
-                        Some(sub) => {
-                            Data::FuncDef(Func(func.clone())).resolve_aobject(&sub, None, ds, self)
-                        }
+                None => match *aobject._type.borrow() {
+                    AType::FuncDefRef(ref func) => match &aobject.sub {
+                        Some(sub) => Func(func.clone()).resolve_aobject(&sub, None, ds, self),
                         None => Ok(rc_ref!(Data::FuncDef(Func(func.clone())))),
                     },
-                    None => panic!(),
+                    _ => panic!(),
                 },
             },
             AObjectType::Call(..) => panic!(),
@@ -238,11 +236,11 @@ impl StructObject {
         match self {
             StructObject::User { _type, data } => match &aobject.kind {
                 AObjectType::Identity(id) => match data.get(id) {
-                    Some(func) => match &aobject.sub {
-                        Some(sub) => func
+                    Some(data) => match &aobject.sub {
+                        Some(sub) => data
                             .borrow()
-                            .resolve_aobject(sub, connected_instance, ds, gd),
-                        None => Ok(func.clone()),
+                            .resolve_aobject(sub, Some(data.clone()), ds, gd),
+                        None => Ok(data.clone()),
                     },
                     None => match &aobject.sub {
                         Some(sub) => Func(_type.methods[id].clone()).resolve_aobject(
