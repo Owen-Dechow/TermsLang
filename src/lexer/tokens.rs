@@ -103,6 +103,7 @@ pub enum KeyWord {
     Continue,
     Call,
     Import,
+    Of,
 }
 impl Display for KeyWord {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

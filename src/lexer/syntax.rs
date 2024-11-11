@@ -67,6 +67,7 @@ pub fn get_syntax_map() -> SyntaxMap<'static> {
             ("continue", KeyWord::Continue),
             ("return", KeyWord::Return),
             ("import", KeyWord::Import),
+            ("of", KeyWord::Of),
         ]),
         bools: HashMap::<&str, bool>::from([("true", true), ("false", false)]),
     };

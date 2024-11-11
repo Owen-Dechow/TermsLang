@@ -717,6 +717,25 @@ fn parse_program(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Progr
                         Err(err) => return Err(ErrType::Parser(err)),
                     }),
                 KeyWord::Import => {
+                    let mut objects = Vec::new();
+                    while let Some(token) = token_stream.advance() {
+                        match &token.0 {
+                            TokenType::Identity(id) => {
+                                objects.push(id.clone());
+                                
+                                match token_stream.advance() {
+                                    Some(token) => match token.0 {
+                                        TokenType::Operator(Operator::Comma) => continue,
+                                        TokenType::KeyWord(KeyWord::Of) => break,
+                                        _ => return Err(ErrType::Parser(ParserError("Unexpected token in import.".to_owned(), token.1.clone())))
+                                    },
+                                    None => return Err(ErrType::Parser(ParserError("Expected import file.".to_owned(), FileLocation::End { file: file.clone() })))
+                                }
+                            }
+                            _ => return Err(ErrType::Parser(ParserError("Expected object name to import.".to_owned(), token.1.clone())))
+                        }
+                    }
+
                     let file_token = match token_stream.advance() {
                         Some(t) => t,
                         None => {
@@ -771,10 +790,21 @@ fn parse_program(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Progr
                         Ok(ok) => ok,
                         Err(err) => return Err(ErrType::Lexer(err)),
                     };
-                    let mut parse_out = parse(lex_out, &path)?;
 
-                    program.structs.append(&mut parse_out.structs);
-                    program.functions.append(&mut parse_out.functions);
+                    let parse_out = parse(lex_out, &path)?;
+                    
+                    for _struct in parse_out.structs {
+                        if objects.contains(&_struct.name) {
+                            program.structs.push(_struct)
+                        }
+                    }
+                    
+                    for func in parse_out.functions {
+                        if objects.contains(&func.name) {
+                            program.functions.push(func);
+                        }
+                    }
+
                 }
                 _ => {
                     return Err(ErrType::Parser(ParserError(

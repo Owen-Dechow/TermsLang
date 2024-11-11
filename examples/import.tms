@@ -1,7 +1,9 @@
 ""
 
-import "fib.tms" ~
+import fib of "fib.tms" ~
 
-# func int @main: str[] args {
-#     println fib.(20).@str.() ~
-# }
+func int @main: str[] args {
+    let int  out = fib.(10) ~
+    println out.@str.() ~
+    return out ~
+}
