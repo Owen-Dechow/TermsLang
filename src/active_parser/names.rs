@@ -33,3 +33,9 @@ pub const F_READLN: &str = "@readln";
 pub const F_MAIN: &str = "@main";
 
 pub const THIS: &str = "@this";
+
+pub const PREFIX_PROTECTED_NAMES: [&str; 31] = [
+    BOOL, BOOL, INT, FLOAT, NULL, STRING, F_BOOL, F_INT, F_FLOAT, F_STRING, F_NEW, F_ADD, F_SUB,
+    F_MULT, F_DIV, F_MOD, F_EXP, F_EQ, F_GT, F_GTEQ, F_LT, F_LTEQ, F_NOT, F_AND, F_OR, F_LEN,
+    F_INDEX, F_APPEND, F_REMOVE, F_READLN, THIS,
+];

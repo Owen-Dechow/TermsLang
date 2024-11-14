@@ -3,7 +3,7 @@ pub mod tokens;
 
 use std::{collections::HashMap, path::PathBuf};
 
-use crate::errors::{FileLocation, LexerError};
+use crate::{errors::{FileLocation, LexerError}, active_parser::names::PREFIX_PROTECTED_NAMES};
 
 use self::{
     syntax::{
@@ -80,6 +80,8 @@ fn handle_char(
     result: &mut Vec<Token>,
     syntax_map: &SyntaxMap,
     positioning: &mut FileLocationModel,
+    id_prefix: &str,
+    prefix_exclude: &[String],
     lex_comments: bool,
 ) -> Result<(), LexerError> {
     // Handel character based on state
@@ -179,7 +181,16 @@ fn handle_char(
                 positioning.build(),
             ));
             section.reset();
-            return handle_char(c, section, result, syntax_map, positioning, lex_comments);
+            return handle_char(
+                c,
+                section,
+                result,
+                syntax_map,
+                positioning,
+                id_prefix,
+                prefix_exclude,
+                lex_comments,
+            );
         }
 
         // If state = float
@@ -201,7 +212,16 @@ fn handle_char(
                 positioning.build(),
             ));
             section.reset();
-            return handle_char(c, section, result, syntax_map, positioning, lex_comments);
+            return handle_char(
+                c,
+                section,
+                result,
+                syntax_map,
+                positioning,
+                id_prefix,
+                prefix_exclude,
+                lex_comments,
+            );
         }
 
         // If state = Word (Variable or Kewword)
@@ -231,15 +251,29 @@ fn handle_char(
                 ))
             } else {
                 // Complete identifier (variable) token
-                result.push(Token(
-                    TokenType::Identity(section.content.clone()),
-                    positioning.build(),
-                ));
+
+                let mut content = section.content.clone();
+                if !prefix_exclude.contains(&content) {
+                    if !PREFIX_PROTECTED_NAMES.contains(&content.as_str()) { 
+                        content = format!("{}{}", id_prefix, content);
+                    }
+                }
+
+                result.push(Token(TokenType::Identity(content), positioning.build()));
             }
 
             // Reset state
             section.reset();
-            return handle_char(c, section, result, syntax_map, positioning, lex_comments);
+            return handle_char(
+                c,
+                section,
+                result,
+                syntax_map,
+                positioning,
+                id_prefix,
+                prefix_exclude,
+                lex_comments,
+            );
         }
 
         // If state = operator
@@ -264,7 +298,16 @@ fn handle_char(
                         positioning.build(),
                     ));
                     section.reset();
-                    return handle_char(c, section, result, syntax_map, positioning, lex_comments);
+                    return handle_char(
+                        c,
+                        section,
+                        result,
+                        syntax_map,
+                        positioning,
+                        id_prefix,
+                        prefix_exclude,
+                        lex_comments,
+                    );
                 } else {
                     // Mark invalid operator
                     return Err(LexerError(
@@ -318,7 +361,13 @@ fn handle_char(
 }
 
 // Lex a program (input)
-pub fn lex(input: &String, lex_comments: bool, file: &PathBuf) -> Result<Vec<Token>, LexerError> {
+pub fn lex(
+    input: &String,
+    lex_comments: bool,
+    file: &PathBuf,
+    id_prefix: &str,
+    prefix_exclude: &[String],
+) -> Result<Vec<Token>, LexerError> {
     // Create syntax map
     let syntax_map = get_syntax_map();
 
@@ -354,6 +403,8 @@ pub fn lex(input: &String, lex_comments: bool, file: &PathBuf) -> Result<Vec<Tok
             &mut result,
             &syntax_map,
             &mut positioning,
+            id_prefix,
+            prefix_exclude,
             lex_comments,
         ) {
             return Err(err);

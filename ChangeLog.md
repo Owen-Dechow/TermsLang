@@ -2,6 +2,12 @@
 
 ## Version 0.7.1
 
+> November 13, 2024
+
+Import all functions under alias to fix `of` import.
+
+## Version 0.7.0
+
 > November 10, 2024
 
 Add `of` keyword.

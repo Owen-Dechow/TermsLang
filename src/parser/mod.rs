@@ -786,25 +786,14 @@ fn parse_program(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Progr
                         module.push(' ');
                         module
                     };
-                    let lex_out = match lexer::lex(&module, false, &path) {
+                    let lex_out = match lexer::lex(&module, false, &path, &path.to_str().unwrap(), &objects) {
                         Ok(ok) => ok,
                         Err(err) => return Err(ErrType::Lexer(err)),
                     };
+                    let mut parse_out = parse(lex_out, &path)?;
 
-                    let parse_out = parse(lex_out, &path)?;
-                    
-                    for _struct in parse_out.structs {
-                        if objects.contains(&_struct.name) {
-                            program.structs.push(_struct)
-                        }
-                    }
-                    
-                    for func in parse_out.functions {
-                        if objects.contains(&func.name) {
-                            program.functions.push(func);
-                        }
-                    }
-
+                    program.structs.append(&mut parse_out.structs);
+                    program.functions.append(&mut parse_out.functions);
                 }
                 _ => {
                     return Err(ErrType::Parser(ParserError(

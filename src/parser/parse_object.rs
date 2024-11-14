@@ -11,6 +11,7 @@ use super::{
     Call, Object, ObjectCreate, ObjectType, TokenStream,
 };
 
+
 // Parse function call
 fn parse_call(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Call, ParserError> {
     match token_stream.advance() {

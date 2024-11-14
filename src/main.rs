@@ -26,7 +26,7 @@ fn main() {
     }
 
     // Lex file
-    let lex_out = match lexer::lex(&program, false, &args.file) {
+    let lex_out = match lexer::lex(&program, false, &args.file, "", &[]) {
         Ok(lex) => lex,
         Err(err) => {
             println!("{}", err.prettify());
