@@ -1,14 +1,29 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser)]
 pub struct Args {
-    #[arg()]
-    pub file: PathBuf,
+    #[command(subcommand)]
+    pub cmd: Command,
+}
 
-    #[arg(long, short)]
-    pub format: bool,
+#[derive(Subcommand)]
+pub enum Command {
+    // Run a program
+    Run {
+        // File containing entry function.
+        file: PathBuf,
+        
+        // Command line arguments
+        args: Vec<String>,
+    },
 
-    #[arg()]
-    pub args: Vec<String>,
+    // Format a file
+    Format {
+        // File with valid syntax
+        file: PathBuf,
+    },
+
+    // Update TermsLang
+    Update,
 }

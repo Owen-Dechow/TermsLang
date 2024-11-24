@@ -1,20 +1,21 @@
 use std::fs;
 use std::path::PathBuf;
+use colored::*;
 
 #[macro_use]
 mod macros;
 
 #[derive(Debug)]
-pub struct LexerError(pub String, pub FileLocation);
-from_for_err_macro! {LexerError}
-impl LexerError {
-    prettify_macro! {"Lexer Error"}
+pub struct ManagerError(pub String, pub FileLocation);
+from_for_err_macro! {ManagerError}
+impl ManagerError {
+    prettify_macro! {"Manager Error"}
 }
 
 #[derive(Debug)]
-pub struct TranspilerError(pub String, pub FileLocation);
-from_for_err_macro! {TranspilerError}
-impl TranspilerError {
+pub struct LexerError(pub String, pub FileLocation);
+from_for_err_macro! {LexerError}
+impl LexerError {
     prettify_macro! {"Lexer Error"}
 }
 

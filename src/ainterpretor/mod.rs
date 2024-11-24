@@ -7,7 +7,6 @@ use crate::{
         names as nm, AFunc, AFuncBlock, ALiteral, AObject, AObjectType, AOperandExpression,
         AOperandExpressionValue, AProgram, ARootTypeCollection, AStruct, ATerm, ATermBlock, AType,
     },
-    cli::Args,
     errors::RuntimeError,
 };
 use std::{cell::RefCell, collections::HashMap, iter::zip, rc::Rc};
@@ -566,7 +565,7 @@ fn interpret_function(
 
 pub fn interpret(
     program: AProgram,
-    args: Args
+    args: Vec<String>
 ) -> Result<(), RuntimeError> {
     let mut gd = GlobalData::new(program.root_types);
 
@@ -580,7 +579,6 @@ pub fn interpret(
 
     if let Some(main) = gd.functions.get(nm::F_MAIN) {
         let commandline_args = Array(rc_ref!(args
-            .args
             .into_iter()
             .map(|x| {
                 rc_ref!(Data::StructObject(StructObject::Root(Root {

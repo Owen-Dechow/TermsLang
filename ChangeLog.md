@@ -1,5 +1,11 @@
 # TermsLang Version Log
 
+## Version 0.7.3
+
+> November 24, 2024
+
+Updated manager.
+
 ## Version 0.7.2
 
 > November 23, 2024

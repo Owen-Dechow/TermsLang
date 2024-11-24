@@ -1,6 +1,6 @@
 macro_rules! prettify_macro {
     ($text:expr) => {
-        // Convert to pretty SyntaxError
+        // Convert to pretty Error
         pub fn prettify(&self) -> String {
             let file_location: &FileLocation = &self.1;
             let err_msg: &String = &self.0;
@@ -18,9 +18,10 @@ macro_rules! prettify_macro {
                 } => {
                     let program = fs::read_to_string(file).unwrap();
 
-                    // Create initall mesage
+                    // Create initial message
                     let mut msg = format!(
-                        "{t} {}:{}:{} ({})",
+                        "{} {}:{}:{} ({})\n",
+                        t.red(),
                         file.display(),
                         start_line + 1,
                         start_col + 1,
@@ -28,44 +29,43 @@ macro_rules! prettify_macro {
                     );
 
                     // Get all the lines the error occurred on
-                    let line_range = (start_line.clone(), end_line + 1);
+                    let offset_start = if *start_line > 0 { 1 } else { 0 };
+                    let line_range = (start_line - offset_start, end_line + 1);
                     let lines = &program.lines().collect::<Vec<&str>>()[line_range.0..line_range.1];
+                    let lines = lines.into_iter().map(|x| x.to_string());
 
                     // Loop over lines and add them to message
-                    for (line_idx, line) in lines.iter().enumerate() {
-                        // Get he start position of the underline
-                        let start = if line_idx == 0 {
-                            if start_col > &0 {
-                                start_col - 1
+                    for (line_idx, line) in lines.enumerate() {
+                       let line_num = line_idx + start_line - offset_start;
+                       msg += &format!("\n{: >5}|", line_num + 1);
+                       
+                       if line_num == *start_line {
+
+                            let start_col = if *start_col == 0 { 0 } else { start_col - 1 };
+
+                            let good1 = &line[..start_col];
+                            let (bad, good2) = if *end_col == start_col {
+                                let bad = &line[start_col..*end_col];
+                                let good2 = &line[*end_col..];
+
+                                (bad, good2)
                             } else {
-                                *start_col
-                            }
-                        } else {
-                            0
-                        };
+                                let bad = &line[start_col..];
+                                let good2 = "";
 
-                        // Get the range of the underline
-                        let range = {
-                            if (start_line + line_idx) == *end_line {
-                                if end_col <= start_col {
-                                    1
-                                } else {
-                                    end_col - start_col
-                                }
-                            } else {
-                                line.len() - start
-                            }
-                        };
+                                (bad, good2)
+                            };
 
-                        // Create underline
-                        let underline = format!(
-                            "{}{}",
-                            " ".repeat(if start > 0 { start } else { 0 }),
-                            "^".repeat(range)
-                        );
-
-                        // Update message to include new line
-                        msg += format!("\n{}\n{}", line, underline).as_str();
+                            msg += &format!("{}{}{}", good1.green(), bad.red(), good2.green());
+                       } else if line_num == *end_line {
+                           let bad = &line[..*end_col];
+                           let good = &line[*end_col..];
+                           msg += &format!("{}{}", bad.red(), good.green())
+                       } else if line_num > *start_line && line_num < *end_line {
+                           msg += &format!("{}", line.red())
+                       } else {
+                           msg += &format!("{}", line.green())
+                       }
                     }
 
                     // Return pretty message
@@ -75,25 +75,22 @@ macro_rules! prettify_macro {
                 FileLocation::End { file } => {
                     let program = fs::read_to_string(file).unwrap();
 
-                    // Get he initall message
-                    let mut msg = format!("{t} {} ({})", file.display(), err_msg);
+                    // Get he initial message
+                    let mut msg = format!("{} {} ({})\n", t.red(), file.display(), err_msg);
 
                     // Get the last line
-                    let line = program.lines().last().unwrap().trim();
-
-                    // Create underline after end of line
-                    let underline = format!("{}^^^", " ".repeat(line.len()));
+                    let line = program.lines().last().unwrap();
 
                     // Update message
-                    msg += format!("\n\t{line}\n\t{underline}").as_str();
+                    msg += format!("\n{: >5}|{}", program.lines().count(), line.green()).as_str();
 
                     // Return pretty message
                     return msg;
                 }
                 // File position non existent
                 FileLocation::None => {
-                    // Get he initall message
-                    let msg = format!("{t} ({})", err_msg);
+                    // Get he initial message
+                    let msg = format!("{} ({})", t.red(), err_msg);
                     return msg;
                 }
             }
