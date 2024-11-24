@@ -1,5 +1,11 @@
 # TermsLang Version Log
 
+## Version 0.7.2
+
+> November 23, 2024
+
+Better errors.
+
 ## Version 0.7.1
 
 > November 13, 2024

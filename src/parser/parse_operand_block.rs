@@ -11,7 +11,7 @@ use super::{
 };
 
 #[derive(Debug, Clone)]
-pub enum OperandExpression {
+pub enum OperandExpressionValue {
     Unary {
         operand: Token,
         val: Box<OperandExpression>,
@@ -31,11 +31,14 @@ pub enum OperandExpression {
 }
 
 #[derive(Debug, Clone)]
+pub struct OperandExpression(pub OperandExpressionValue, pub FileLocation);
+
+#[derive(Debug, Clone)]
 enum OperandComponent {
     Object(Object),
     Literal(Token),
     Operand(Token),
-    Create(ObjectCreate),
+    Create(ObjectCreate, FileLocation),
 }
 
 fn get_precedent_map() -> Vec<Vec<Operator>> {
@@ -100,10 +103,10 @@ fn parse_slice(
     if slice.len() == 1 {
         match &slice[0] {
             OperandComponent::Literal(value) => {
-                return Ok(OperandExpression::Literal(value.clone()))
+                return Ok(OperandExpression(OperandExpressionValue::Literal(value.clone()), value.1.clone()))
             }
-            OperandComponent::Object(value) => return Ok(OperandExpression::Object(value.clone())),
-            OperandComponent::Create(value) => return Ok(OperandExpression::Create(value.clone())),
+            OperandComponent::Object(value) => return Ok(OperandExpression(OperandExpressionValue::Object(value.clone()), value.loc.clone())),
+            OperandComponent::Create(value, loc) => return Ok(OperandExpression(OperandExpressionValue::Create(value.clone()), loc.clone())),
             OperandComponent::Operand(token) => {
                 return Err(ParserError(
                     "Unexpected operator where value should be found".to_string(),
@@ -249,10 +252,10 @@ fn parse_slice(
                                     ));
                                 }
 
-                                return Ok(OperandExpression::Dot {
+                                return Ok(OperandExpression(OperandExpressionValue::Dot {
                                     left: Box::new(parse_slice(left_slice, president_map, file)?),
                                     right: right_object.clone(),
-                                });
+                                }, operand_token.1.clone()));
                             }
 
                             // Unary operators
@@ -274,14 +277,14 @@ fn parse_slice(
                                     ));
                                 }
 
-                                return Ok(OperandExpression::Unary {
+                                return Ok(OperandExpression(OperandExpressionValue::Unary {
                                     operand: operand_token.clone(),
                                     val: Box::new(parse_slice(
                                         slice.into_iter().cloned().collect(),
                                         president_map,
                                         file,
                                     )?),
-                                });
+                                }, operand_token.1.clone()));
                             }
 
                             let slice_l = match slice.get(..operand_component_idx) {
@@ -318,7 +321,7 @@ fn parse_slice(
                                 ));
                             }
 
-                            return Ok(OperandExpression::Binary {
+                            return Ok(OperandExpression(OperandExpressionValue::Binary {
                                 operand: operand_token.clone(),
                                 left: Box::new(parse_slice(
                                     slice_l.into_iter().cloned().collect(),
@@ -330,7 +333,7 @@ fn parse_slice(
                                     president_map,
                                     file,
                                 )?),
-                            });
+                            }, operand_token.1.clone()));
                         }
                     }
                 }
@@ -403,8 +406,9 @@ pub fn parse_operand_block(
                     OperandComponent::Object(parse_object_peekable_callable(token_stream, file)?)
                 }
                 TokenType::Operator(Operator::New) => {
+                    let loc = token.1.clone();
                     token_stream.back();
-                    OperandComponent::Create(parse_object_create(token_stream, file)?)
+                    OperandComponent::Create(parse_object_create(token_stream, file)?, loc)
                 }
                 TokenType::Operator(_) => OperandComponent::Operand(token.clone()),
                 _ => {

@@ -1,9 +1,9 @@
 # TermsLang
 The terms programming language
 
-> Simple, Consise, ~~Fast~~
+> Simple, Concise, ~~Fast~~
 
-## Latest Version: `v0.7.1`
+## Latest Version: `v0.7.2`
 
 ## Installation
 ```

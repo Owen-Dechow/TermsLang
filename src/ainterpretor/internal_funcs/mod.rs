@@ -11,14 +11,14 @@ use crate::{
 use super::{BlockExit, Data, DataScope, GlobalData, Root, RootValue, StructObject};
 
 macro_rules! root {
-    ($data:expr) => {{
+    ($data:expr, $loc:expr) => {{
         match *$data.borrow() {
             Data::StructObject(ref struct_object) => match struct_object {
                 StructObject::Root(ref root) => match root.value {
                     RootValue::Null => {
                         return Err(RuntimeError(
                             format!("{} value error.", nm::NULL),
-                            FileLocation::None,
+                            $loc.clone(),
                         ))
                     }
                     _ => root,
@@ -54,28 +54,29 @@ pub fn interpret_function(
     ds: Option<&DataScope>,
     gd: &GlobalData,
     args: &[Rc<RefCell<Data>>],
+    loc: &FileLocation,
 ) -> Result<BlockExit, RuntimeError> {
     let out = match func.name.as_str() {
         nm::F_READLN => readln(gd),
         // Root type logic functions
-        nm::F_ADD => add(this(ds), &args[0]),
-        nm::F_SUB => subtract(this(ds), &args[0]),
-        nm::F_MULT => multiply(this(ds), &args[0]),
-        nm::F_DIV => divide(this(ds), &args[0]),
-        nm::F_MOD => modulo(this(ds), &args[0]),
-        nm::F_EXP => exponent(this(ds), &args[0]),
-        nm::F_GT => greater_than(this(ds), &args[0]),
-        nm::F_GTEQ => greater_than_or_equal(this(ds), &args[0]),
-        nm::F_LT => less_than(this(ds), &args[0]),
-        nm::F_LTEQ => less_than_or_equal(this(ds), &args[0]),
-        nm::F_EQ => equal(this(ds), &args[0]),
-        nm::F_NOT => logical_not(this(ds)),
-        nm::F_AND => logical_and(this(ds), &args[0]),
-        nm::F_OR => logical_or(this(ds), &args[0]),
+        nm::F_ADD => add(this(ds), &args[0], loc),
+        nm::F_SUB => subtract(this(ds), &args[0], loc),
+        nm::F_MULT => multiply(this(ds), &args[0], loc),
+        nm::F_DIV => divide(this(ds), &args[0], loc),
+        nm::F_MOD => modulo(this(ds), &args[0], loc),
+        nm::F_EXP => exponent(this(ds), &args[0], loc),
+        nm::F_GT => greater_than(this(ds), &args[0], loc),
+        nm::F_GTEQ => greater_than_or_equal(this(ds), &args[0], loc),
+        nm::F_LT => less_than(this(ds), &args[0], loc),
+        nm::F_LTEQ => less_than_or_equal(this(ds), &args[0], loc),
+        nm::F_EQ => equal(this(ds), &args[0], loc),
+        nm::F_NOT => logical_not(this(ds), loc),
+        nm::F_AND => logical_and(this(ds), &args[0], loc),
+        nm::F_OR => logical_or(this(ds), &args[0], loc),
         // Root type conversion functions
         nm::F_BOOL => to_bool(this(ds)),
-        nm::F_INT => to_int(this(ds)),
-        nm::F_FLOAT => to_float(this(ds)),
+        nm::F_INT => to_int(this(ds), loc),
+        nm::F_FLOAT => to_float(this(ds), loc),
         nm::F_STRING => to_string(this(ds)),
         nm::F_NEW => new(this(ds), args.get(0), gd),
         _ => panic!("Function {} not implemented.", func.name),
@@ -110,17 +111,21 @@ fn readln(gd: &GlobalData) -> Result<Rc<RefCell<Data>>, RuntimeError> {
     }))));
 }
 
-fn add(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError> {
-    let value = match root!(a).value {
-        RootValue::Int(a) => match root!(b).value {
+fn add(
+    a: &Rc<RefCell<Data>>,
+    b: &Rc<RefCell<Data>>,
+    loc: &FileLocation,
+) -> Result<Rc<RefCell<Data>>, RuntimeError> {
+    let value = match root!(a, loc).value {
+        RootValue::Int(a) => match root!(b, loc).value {
             RootValue::Int(b) => RootValue::Int(a + b),
             _ => panic!(),
         },
-        RootValue::Float(a) => match root!(b).value {
+        RootValue::Float(a) => match root!(b, loc).value {
             RootValue::Float(b) => RootValue::Float(a + b),
             _ => panic!(),
         },
-        RootValue::String(ref a_str) => match root!(b).value {
+        RootValue::String(ref a_str) => match root!(b, loc).value {
             RootValue::String(ref b_str) => RootValue::String(format!("{}{}", a_str, b_str)),
             _ => panic!(),
         },
@@ -128,7 +133,7 @@ fn add(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>
     };
 
     Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
-        _type: root!(a)._type.clone(),
+        _type: root!(a, loc)._type.clone(),
         value,
     }))))
 }
@@ -136,13 +141,14 @@ fn add(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>
 fn subtract(
     a: &Rc<RefCell<Data>>,
     b: &Rc<RefCell<Data>>,
+    loc: &FileLocation,
 ) -> Result<Rc<RefCell<Data>>, RuntimeError> {
-    let value = match root!(a).value {
-        RootValue::Int(a) => match root!(b).value {
+    let value = match root!(a, loc).value {
+        RootValue::Int(a) => match root!(b, loc).value {
             RootValue::Int(b) => RootValue::Int(a - b),
             _ => panic!(),
         },
-        RootValue::Float(a) => match root!(b).value {
+        RootValue::Float(a) => match root!(b, loc).value {
             RootValue::Float(b) => RootValue::Float(a - b),
             _ => panic!(),
         },
@@ -150,7 +156,7 @@ fn subtract(
     };
 
     Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
-        _type: root!(a)._type.clone(),
+        _type: root!(a, loc)._type.clone(),
         value,
     }))))
 }
@@ -158,13 +164,14 @@ fn subtract(
 fn multiply(
     a: &Rc<RefCell<Data>>,
     b: &Rc<RefCell<Data>>,
+    loc: &FileLocation,
 ) -> Result<Rc<RefCell<Data>>, RuntimeError> {
-    let value = match root!(a).value {
-        RootValue::Int(a) => match root!(b).value {
+    let value = match root!(a, loc).value {
+        RootValue::Int(a) => match root!(b, loc).value {
             RootValue::Int(b) => RootValue::Int(a * b),
             _ => panic!(),
         },
-        RootValue::Float(a) => match root!(b).value {
+        RootValue::Float(a) => match root!(b, loc).value {
             RootValue::Float(b) => RootValue::Float(a * b),
             _ => panic!(),
         },
@@ -172,18 +179,22 @@ fn multiply(
     };
 
     Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
-        _type: root!(a)._type.clone(),
+        _type: root!(a, loc)._type.clone(),
         value,
     }))))
 }
 
-fn divide(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError> {
-    let value = match root!(a).value {
-        RootValue::Int(a) => match root!(b).value {
+fn divide(
+    a: &Rc<RefCell<Data>>,
+    b: &Rc<RefCell<Data>>,
+    loc: &FileLocation,
+) -> Result<Rc<RefCell<Data>>, RuntimeError> {
+    let value = match root!(a, loc).value {
+        RootValue::Int(a) => match root!(b, loc).value {
             RootValue::Int(b) => RootValue::Int(a / b),
             _ => panic!(),
         },
-        RootValue::Float(a) => match root!(b).value {
+        RootValue::Float(a) => match root!(b, loc).value {
             RootValue::Float(b) => RootValue::Float(a / b),
             _ => panic!(),
         },
@@ -191,22 +202,26 @@ fn divide(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Dat
     };
 
     Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
-        _type: root!(a)._type.clone(),
+        _type: root!(a, loc)._type.clone(),
         value,
     }))))
 }
 
-fn modulo(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError> {
-    let value = match &root!(a).value {
-        RootValue::Int(a) => match root!(b).value {
+fn modulo(
+    a: &Rc<RefCell<Data>>,
+    b: &Rc<RefCell<Data>>,
+    loc: &FileLocation,
+) -> Result<Rc<RefCell<Data>>, RuntimeError> {
+    let value = match &root!(a, loc).value {
+        RootValue::Int(a) => match root!(b, loc).value {
             RootValue::Int(b) => RootValue::Int(a % b),
             _ => panic!(),
         },
-        RootValue::Float(a) => match root!(b).value {
+        RootValue::Float(a) => match root!(b, loc).value {
             RootValue::Float(b) => RootValue::Float(a % b),
             _ => panic!(),
         },
-        RootValue::String(a) => match &root!(b).value {
+        RootValue::String(a) => match &root!(b, loc).value {
             RootValue::String(b) => RootValue::String(a.replace("%", &b)),
             _ => panic!(),
         },
@@ -214,7 +229,7 @@ fn modulo(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Dat
     };
 
     Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
-        _type: root!(a)._type.clone(),
+        _type: root!(a, loc)._type.clone(),
         value,
     }))))
 }
@@ -222,13 +237,14 @@ fn modulo(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Dat
 fn exponent(
     a: &Rc<RefCell<Data>>,
     b: &Rc<RefCell<Data>>,
+    loc: &FileLocation,
 ) -> Result<Rc<RefCell<Data>>, RuntimeError> {
-    let value = match root!(a).value {
-        RootValue::Int(base) => match root!(b).value {
+    let value = match root!(a, loc).value {
+        RootValue::Int(base) => match root!(b, loc).value {
             RootValue::Int(exp) => RootValue::Int(base.pow(exp as u32)),
             _ => panic!(),
         },
-        RootValue::Float(base) => match root!(b).value {
+        RootValue::Float(base) => match root!(b, loc).value {
             RootValue::Float(exp) => RootValue::Float(base.powf(exp)),
             _ => panic!(),
         },
@@ -236,26 +252,30 @@ fn exponent(
     };
 
     Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
-        _type: root!(a)._type.clone(),
+        _type: root!(a, loc)._type.clone(),
         value,
     }))))
 }
 
-fn equal(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError> {
+fn equal(
+    a: &Rc<RefCell<Data>>,
+    b: &Rc<RefCell<Data>>,
+    loc: &FileLocation,
+) -> Result<Rc<RefCell<Data>>, RuntimeError> {
     let value = match nroot!(a).value {
-        RootValue::Int(a) => match root!(b).value {
+        RootValue::Int(a) => match root!(b, loc).value {
             RootValue::Int(b) => RootValue::Bool(a == b),
             _ => panic!(),
         },
-        RootValue::Float(a) => match root!(b).value {
+        RootValue::Float(a) => match root!(b, loc).value {
             RootValue::Float(b) => RootValue::Bool(a == b),
             _ => panic!(),
         },
-        RootValue::String(ref a_str) => match root!(b).value {
+        RootValue::String(ref a_str) => match root!(b, loc).value {
             RootValue::String(ref b_str) => RootValue::Bool(a_str == b_str),
             _ => panic!(),
         },
-        RootValue::Bool(a) => match root!(b).value {
+        RootValue::Bool(a) => match root!(b, loc).value {
             RootValue::Bool(b) => RootValue::Bool(a == b),
             _ => panic!(),
         },
@@ -274,13 +294,14 @@ fn equal(a: &Rc<RefCell<Data>>, b: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data
 fn greater_than(
     a: &Rc<RefCell<Data>>,
     b: &Rc<RefCell<Data>>,
+    loc: &FileLocation,
 ) -> Result<Rc<RefCell<Data>>, RuntimeError> {
-    let value = match root!(a).value {
-        RootValue::Int(a) => match root!(b).value {
+    let value = match root!(a, loc).value {
+        RootValue::Int(a) => match root!(b, loc).value {
             RootValue::Int(b) => RootValue::Bool(a > b),
             _ => panic!(),
         },
-        RootValue::Float(a) => match root!(b).value {
+        RootValue::Float(a) => match root!(b, loc).value {
             RootValue::Float(b) => RootValue::Bool(a > b),
             _ => panic!(),
         },
@@ -288,7 +309,7 @@ fn greater_than(
     };
 
     Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
-        _type: root!(a)._type.clone(),
+        _type: root!(a, loc)._type.clone(),
         value,
     }))))
 }
@@ -296,13 +317,14 @@ fn greater_than(
 fn greater_than_or_equal(
     a: &Rc<RefCell<Data>>,
     b: &Rc<RefCell<Data>>,
+    loc: &FileLocation,
 ) -> Result<Rc<RefCell<Data>>, RuntimeError> {
-    let value = match root!(a).value {
-        RootValue::Int(a) => match root!(b).value {
+    let value = match root!(a, loc).value {
+        RootValue::Int(a) => match root!(b, loc).value {
             RootValue::Int(b) => RootValue::Bool(a >= b),
             _ => panic!(),
         },
-        RootValue::Float(a) => match root!(b).value {
+        RootValue::Float(a) => match root!(b, loc).value {
             RootValue::Float(b) => RootValue::Bool(a >= b),
             _ => panic!(),
         },
@@ -310,7 +332,7 @@ fn greater_than_or_equal(
     };
 
     Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
-        _type: root!(a)._type.clone(),
+        _type: root!(a, loc)._type.clone(),
         value,
     }))))
 }
@@ -318,13 +340,14 @@ fn greater_than_or_equal(
 fn less_than(
     a: &Rc<RefCell<Data>>,
     b: &Rc<RefCell<Data>>,
+    loc: &FileLocation,
 ) -> Result<Rc<RefCell<Data>>, RuntimeError> {
-    let value = match root!(a).value {
-        RootValue::Int(a) => match root!(b).value {
+    let value = match root!(a, loc).value {
+        RootValue::Int(a) => match root!(b, loc).value {
             RootValue::Int(b) => RootValue::Bool(a < b),
             _ => panic!(),
         },
-        RootValue::Float(a) => match root!(b).value {
+        RootValue::Float(a) => match root!(b, loc).value {
             RootValue::Float(b) => RootValue::Bool(a < b),
             _ => panic!(),
         },
@@ -332,7 +355,7 @@ fn less_than(
     };
 
     Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
-        _type: root!(a)._type.clone(),
+        _type: root!(a, loc)._type.clone(),
         value,
     }))))
 }
@@ -340,13 +363,14 @@ fn less_than(
 fn less_than_or_equal(
     a: &Rc<RefCell<Data>>,
     b: &Rc<RefCell<Data>>,
+    loc: &FileLocation,
 ) -> Result<Rc<RefCell<Data>>, RuntimeError> {
-    let value = match root!(a).value {
-        RootValue::Int(a) => match root!(b).value {
+    let value = match root!(a, loc).value {
+        RootValue::Int(a) => match root!(b, loc).value {
             RootValue::Int(b) => RootValue::Bool(a <= b),
             _ => panic!(),
         },
-        RootValue::Float(a) => match root!(b).value {
+        RootValue::Float(a) => match root!(b, loc).value {
             RootValue::Float(b) => RootValue::Bool(a <= b),
             _ => panic!(),
         },
@@ -354,19 +378,22 @@ fn less_than_or_equal(
     };
 
     Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
-        _type: root!(a)._type.clone(),
+        _type: root!(a, loc)._type.clone(),
         value,
     }))))
 }
 
-fn logical_not(a: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError> {
-    let value = match root!(a).value {
+fn logical_not(
+    a: &Rc<RefCell<Data>>,
+    loc: &FileLocation,
+) -> Result<Rc<RefCell<Data>>, RuntimeError> {
+    let value = match root!(a, loc).value {
         RootValue::Bool(a) => RootValue::Bool(!a),
         _ => panic!(),
     };
 
     Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
-        _type: root!(a)._type.clone(),
+        _type: root!(a, loc)._type.clone(),
         value,
     }))))
 }
@@ -374,9 +401,10 @@ fn logical_not(a: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError>
 fn logical_and(
     a: &Rc<RefCell<Data>>,
     b: &Rc<RefCell<Data>>,
+    loc: &FileLocation,
 ) -> Result<Rc<RefCell<Data>>, RuntimeError> {
-    let value = match root!(a).value {
-        RootValue::Bool(a) => match root!(b).value {
+    let value = match root!(a, loc).value {
+        RootValue::Bool(a) => match root!(b, loc).value {
             RootValue::Bool(b) => RootValue::Bool(a && b),
             _ => panic!(),
         },
@@ -384,7 +412,7 @@ fn logical_and(
     };
 
     Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
-        _type: root!(a)._type.clone(),
+        _type: root!(a, loc)._type.clone(),
         value,
     }))))
 }
@@ -392,9 +420,10 @@ fn logical_and(
 fn logical_or(
     a: &Rc<RefCell<Data>>,
     b: &Rc<RefCell<Data>>,
+    loc: &FileLocation,
 ) -> Result<Rc<RefCell<Data>>, RuntimeError> {
-    let value = match root!(a).value {
-        RootValue::Bool(a) => match root!(b).value {
+    let value = match root!(a, loc).value {
+        RootValue::Bool(a) => match root!(b, loc).value {
             RootValue::Bool(b) => RootValue::Bool(a || b),
             _ => panic!(),
         },
@@ -402,7 +431,7 @@ fn logical_or(
     };
 
     Ok(rc_ref!(Data::StructObject(StructObject::Root(Root {
-        _type: root!(a)._type.clone(),
+        _type: root!(a, loc)._type.clone(),
         value,
     }))))
 }
@@ -422,14 +451,14 @@ fn to_bool(data: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError> 
     }))))
 }
 
-fn to_int(data: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError> {
+fn to_int(data: &Rc<RefCell<Data>>, loc: &FileLocation) -> Result<Rc<RefCell<Data>>, RuntimeError> {
     let value = match nroot!(data).value {
         RootValue::Int(i) => RootValue::Int(i),
         RootValue::Float(f) => RootValue::Int(f as i32),
         RootValue::Bool(b) => RootValue::Int(if b { 1 } else { 0 }),
         RootValue::String(ref s) => RootValue::Int(s.parse::<i32>().unwrap_or(Err(RuntimeError(
             format!("Could not convert '{}' to int.", s),
-            FileLocation::None,
+            loc.clone(),
         ))?)),
         RootValue::Null => RootValue::Int(0),
     };
@@ -440,17 +469,17 @@ fn to_int(data: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError> {
     }))))
 }
 
-fn to_float(data: &Rc<RefCell<Data>>) -> Result<Rc<RefCell<Data>>, RuntimeError> {
+fn to_float(
+    data: &Rc<RefCell<Data>>,
+    loc: &FileLocation,
+) -> Result<Rc<RefCell<Data>>, RuntimeError> {
     let value = match nroot!(data).value {
         RootValue::Float(f) => RootValue::Float(f),
         RootValue::Int(i) => RootValue::Float(i as f32),
         RootValue::Bool(b) => RootValue::Float(if b { 1.0 } else { 0.0 }),
-        RootValue::String(ref s) => {
-            RootValue::Float(s.parse::<f32>().unwrap_or(Err(RuntimeError(
-                format!("Could not convert '{}' to float.", s),
-                FileLocation::None,
-            ))?))
-        }
+        RootValue::String(ref s) => RootValue::Float(s.parse::<f32>().unwrap_or(Err(
+            RuntimeError(format!("Could not convert '{}' to float.", s), loc.clone()),
+        )?)),
         RootValue::Null => RootValue::Float(0.0),
     };
 

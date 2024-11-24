@@ -6,8 +6,8 @@ use crate::{
     errors::{AParserError, FileLocation},
     lexer::tokens::{Operator, Token, TokenType},
     parser::{
-        parse_operand_block::OperandExpression, Call, Object, ObjectType, Program, Term, TermBlock,
-        Type,
+        parse_operand_block::{OperandExpression, OperandExpressionValue},
+        Call, Object, ObjectType, Program, Term, TermBlock, Type,
     },
 };
 
@@ -161,6 +161,7 @@ impl GlobalData {
                 returntype: self.create_forward_ref(&func_return),
                 block: AFuncBlock::Internal,
                 args,
+                loc: FileLocation::None,
             };
 
             a_funcs.insert(func_name.to_string(), a_func.into());
@@ -185,6 +186,7 @@ impl GlobalData {
                 returntype: AType::from_astruct(returntype),
                 block: AFuncBlock::Internal,
                 args: Vec::new(),
+                loc: FileLocation::None,
             }
             .into(),
         );
@@ -377,18 +379,22 @@ impl AType {
         return RefCell::new(AType::StructObject(a_struct)).into();
     }
 
-    fn structdefref_is_instance(&self, inst: &Self) -> Result<bool, AParserError> {
+    fn structdefref_is_instance(
+        &self,
+        inst: &Self,
+        loc: &FileLocation,
+    ) -> Result<bool, AParserError> {
         match (self, inst) {
             (AType::StructDefRef(defref), AType::StructObject(object)) => {
                 Ok(Rc::ptr_eq(defref, object))
             }
-            (AType::ArrayObject(arr_type), AType::ArrayObject(object)) => {
-                arr_type.borrow().structdefref_is_instance(&object.borrow())
-            }
+            (AType::ArrayObject(arr_type), AType::ArrayObject(object)) => arr_type
+                .borrow()
+                .structdefref_is_instance(&object.borrow(), loc),
             (AType::ArrayObject(..), AType::StructObject(..)) => Ok(false),
             (AType::StructDefRef(..), AType::StructDefRef(astruct)) => Err(AParserError(
                 format!("{:?} is a type definition not an instance", astruct.name),
-                FileLocation::None,
+                loc.clone(),
             )),
             _ => panic!(
                 "Bad StructDefRef Is Instance Check:\n - self: {:?}\n - inst: {:?}",
@@ -574,11 +580,11 @@ impl AObject {
             if !expected_type
                 ._type
                 .borrow()
-                .structdefref_is_instance(&a_arg._type.borrow())?
+                .structdefref_is_instance(&a_arg._type.borrow(), &a_arg.loc)?
             {
                 return Err(AParserError(
-                    format!("Missmatched Types (3)"),
-                    FileLocation::None,
+                    format!("Missmatched arg type."),
+                    a_arg.loc.clone(),
                 ));
             }
 
@@ -657,6 +663,7 @@ impl AObject {
                         returntype,
                         block: AFuncBlock::InternalArray,
                         args,
+                        loc: FileLocation::None,
                     }
                     .into(),
                 );
@@ -700,6 +707,7 @@ impl AObject {
                         returntype: returntype.borrow().to_type_defref(),
                         block: AFuncBlock::InternalArray,
                         args,
+                        loc: FileLocation::None,
                     }
                     .into(),
                 );
@@ -862,6 +870,7 @@ pub struct AFunc {
     pub returntype: Rc<RefCell<AType>>,
     pub block: AFuncBlock,
     pub args: Vec<AVarDef>,
+    pub loc: FileLocation,
 }
 
 #[derive(Debug)]
@@ -886,6 +895,7 @@ impl ALiteral {
 #[derive(Debug)]
 pub struct AOperandExpression {
     _type: Rc<RefCell<AType>>,
+    pub loc: FileLocation,
     pub value: AOperandExpressionValue,
 }
 
@@ -953,8 +963,8 @@ fn aparse_operandexpression(
     ds: &DataScope,
     gd: &GlobalData,
 ) -> Result<AOperandExpression, AParserError> {
-    match operand_expression {
-        OperandExpression::Unary { operand, val } => {
+    match &operand_expression.0 {
+        OperandExpressionValue::Unary { operand, val } => {
             let func = match &operand.0 {
                 TokenType::Operator(Operator::Not) => nm::F_NOT,
                 _ => panic!(),
@@ -979,9 +989,10 @@ fn aparse_operandexpression(
                     left: Box::new(left),
                     right,
                 },
+                loc: operand.1.clone(),
             })
         }
-        OperandExpression::Binary {
+        OperandExpressionValue::Binary {
             operand,
             left,
             right,
@@ -1023,10 +1034,12 @@ fn aparse_operandexpression(
                     left: Box::new(left),
                     right,
                 },
+                loc: object.loc.clone(),
             })
         }
-        OperandExpression::Dot { left, right } => {
+        OperandExpressionValue::Dot { left, right } => {
             let left = aparse_operandexpression(&left, ds, gd)?;
+            let loc = left.loc.clone();
             let right = AObject::from_object_sub(&right, &left._type.borrow(), ds, gd)?;
             Ok(AOperandExpression {
                 _type: right.bottom_type(),
@@ -1034,25 +1047,29 @@ fn aparse_operandexpression(
                     left: Box::new(left),
                     right,
                 },
+                loc,
             })
         }
-        OperandExpression::Literal(literal) => {
-            let a_literal = ALiteral::from_token_literal(literal);
+        OperandExpressionValue::Literal(literal) => {
+            let a_literal = ALiteral::from_token_literal(&literal);
             let a_type = AType::from_aliteral(&a_literal, gd);
             return Ok(AOperandExpression {
                 _type: a_type,
                 value: AOperandExpressionValue::Literal(a_literal),
+                loc: literal.1.clone(),
             });
         }
-        OperandExpression::Object(obj) => {
-            let a_object = AObject::from_object(obj, ds, gd)?;
+        OperandExpressionValue::Object(obj) => {
+            let a_object = AObject::from_object(&obj, ds, gd)?;
+            let loc = a_object.loc.clone();
 
             return Ok(AOperandExpression {
                 _type: a_object.bottom_type(),
                 value: AOperandExpressionValue::Object(a_object),
+                loc,
             });
         }
-        OperandExpression::Create(create) => {
+        OperandExpressionValue::Create(create) => {
             let _type = ds.resolve_type(&create.kind, gd)?;
             let new_method = match *_type.borrow() {
                 AType::StructDefRef(ref rc) => rc.methods.get(nm::F_NEW).cloned(),
@@ -1069,11 +1086,11 @@ fn aparse_operandexpression(
                     if !argdef
                         ._type
                         .borrow()
-                        .structdefref_is_instance(&arg._type.borrow())?
+                        .structdefref_is_instance(&arg._type.borrow(), &arg.loc)?
                     {
                         return Err(AParserError(
-                            format!("Invalid arg to {}.", nm::F_NEW),
-                            FileLocation::None,
+                            format!("Arg to {} was incorrect type.", nm::F_NEW),
+                            arg.loc.clone(),
                         ));
                     }
 
@@ -1083,7 +1100,7 @@ fn aparse_operandexpression(
                 if new_method.args.len() != create.args.args.len() {
                     return Err(AParserError(
                         format!("Invalid number of args to {}.", nm::F_NEW),
-                        FileLocation::None,
+                        operand_expression.1.clone(),
                     ));
                 }
 
@@ -1091,8 +1108,12 @@ fn aparse_operandexpression(
             } else {
                 if create.args.args.len() > 0 {
                     return Err(AParserError(
-                        format!("{:?} has no explicit {} function, therefore $() should not take any arguments.", _type.borrow(), nm::F_NEW),
-                        FileLocation::None,
+                        format!(
+                            "{:?} has no explicit {} function, therefore $() should not take any arguments.",
+                            _type.borrow(),
+                            nm::F_NEW
+                        ),
+                        create.args.args[0].1.clone(),
                     ));
                 }
 
@@ -1105,6 +1126,7 @@ fn aparse_operandexpression(
                     _type: _type.clone(),
                     args,
                 },
+                loc: operand_expression.1.clone(),
             });
         }
     }
@@ -1115,6 +1137,7 @@ fn aparse_termblock(
     parent_ds: &DataScope,
     gd: &GlobalData,
     return_opts: &ReturnOpts,
+    loc: &FileLocation,
 ) -> Result<ATermBlock, AParserError> {
     let mut a_terms = Vec::new();
     let mut ds = parent_ds.child();
@@ -1127,11 +1150,11 @@ fn aparse_termblock(
 
                 if !AType::from_astruct(gd.string_type.clone())
                     .borrow()
-                    .structdefref_is_instance(&value._type.borrow())?
+                    .structdefref_is_instance(&value._type.borrow(), &value.loc)?
                 {
                     return Err(AParserError(
                         "Cannot print non string objects.".to_string(),
-                        FileLocation::None,
+                        value.loc.clone(),
                     ));
                 }
 
@@ -1147,11 +1170,11 @@ fn aparse_termblock(
 
                 if !a_type
                     .borrow()
-                    .structdefref_is_instance(&a_value._type.borrow())?
+                    .structdefref_is_instance(&a_value._type.borrow(), &a_value.loc)?
                 {
                     return Err(AParserError(
-                        format!("Missmatched types (0)"),
-                        FileLocation::None,
+                        format!("Value type does not match var type."),
+                        a_value.loc.clone(),
                     ));
                 }
 
@@ -1169,7 +1192,7 @@ fn aparse_termblock(
                 if !return_opts
                     .expected_type
                     .borrow()
-                    .structdefref_is_instance(&value._type.borrow())?
+                    .structdefref_is_instance(&value._type.borrow(), &value.loc)?
                 {
                     if !value
                         ._type
@@ -1179,8 +1202,8 @@ fn aparse_termblock(
                         .is_nulldef(gd)
                     {
                         return Err(AParserError(
-                            format!("Missmatched types (1)"),
-                            FileLocation::None,
+                            format!("Incorrect type retuned from function."),
+                            value.loc.clone(),
                         ));
                     }
                 }
@@ -1188,7 +1211,7 @@ fn aparse_termblock(
                 if term_idx != num_terms - 1 {
                     return Err(AParserError(
                         format!("Return must be last term in block."),
-                        FileLocation::None,
+                        value.loc.clone(),
                     ));
                 }
 
@@ -1200,11 +1223,18 @@ fn aparse_termblock(
                 value,
             } => {
                 let operand_expression = |op: Operator, left: Object, right: OperandExpression| {
-                    OperandExpression::Binary {
-                        operand: Token(TokenType::Operator(op), FileLocation::None),
-                        left: Box::new(OperandExpression::Object(left)),
-                        right: Box::new(right),
-                    }
+                    let loc = left.loc.clone();
+                    OperandExpression(
+                        OperandExpressionValue::Binary {
+                            operand: Token(TokenType::Operator(op), left.loc.clone()),
+                            left: Box::new(OperandExpression(
+                                OperandExpressionValue::Object(left),
+                                loc.clone(),
+                            )),
+                            right: Box::new(right),
+                        },
+                        loc,
+                    )
                 };
 
                 let operand_expression = match set_operator {
@@ -1254,7 +1284,7 @@ fn aparse_termblock(
                             "Conditional must be of type bool, found type {:?}",
                             &conditional._type.borrow()
                         ),
-                        FileLocation::None,
+                        conditional.loc.clone(),
                     ));
                 }
 
@@ -1264,8 +1294,8 @@ fn aparse_termblock(
                     return_opts.requirement_free_opts()
                 };
 
-                let block = aparse_termblock(block, &ds, gd, &return_opts)?;
-                let else_block = aparse_termblock(else_block, &ds, gd, &return_opts)?;
+                let block = aparse_termblock(block, &ds, gd, &return_opts, loc)?;
+                let else_block = aparse_termblock(else_block, &ds, gd, &return_opts, loc)?;
 
                 ATerm::If {
                     conditional,
@@ -1291,7 +1321,7 @@ fn aparse_termblock(
 
                 let return_opts = return_opts.requirement_free_opts().loop_opts();
 
-                let block = aparse_termblock(block, &ds, gd, &return_opts)?;
+                let block = aparse_termblock(block, &ds, gd, &return_opts, loc)?;
 
                 ATerm::Loop {
                     counter: counter.to_string(),
@@ -1299,23 +1329,23 @@ fn aparse_termblock(
                     block,
                 }
             }
-            Term::Break => {
+            Term::Break(loc)=> {
                 if return_opts.loop_returns {
                     ATerm::Break
                 } else {
                     return Err(AParserError(
                         format!("Cannot break from outside loop."),
-                        FileLocation::None,
+                        loc.clone(),
                     ));
                 }
             }
-            Term::Continue => {
+            Term::Continue (loc)=> {
                 if return_opts.loop_returns {
                     ATerm::Continue
                 } else {
                     return Err(AParserError(
                         format!("Cannot continue from outside loop."),
-                        FileLocation::None,
+                        loc.clone(),
                     ));
                 }
             }
@@ -1335,7 +1365,7 @@ fn aparse_termblock(
                 if !return_opts.expected_type.borrow().is_nulldef(gd) {
                     return Err(AParserError(
                         format!("Not all paths return correct type"),
-                        FileLocation::None,
+                        loc.clone(),
                     ));
                 }
             }
@@ -1355,7 +1385,7 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
         if names.contains(&_struct.name) {
             return Err(AParserError(
                 format!("Global object {} has multiple definitions.", _struct.name),
-                FileLocation::None,
+                _struct.loc.clone(),
             ));
         } else {
             names.insert(&_struct.name);
@@ -1378,6 +1408,7 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
         for method in &_struct.methods {
             let returntype = AType::from_type_nyd(&method.returntype, &mut gd);
             let name = method.name.clone();
+            let loc = method.loc.clone();
 
             let mut args = Vec::new();
             for arg in &method.args {
@@ -1396,6 +1427,7 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
                 returntype,
                 block,
                 args,
+                loc,
             };
 
             methods.insert(a_method.name.to_owned(), a_method.into());
@@ -1416,7 +1448,7 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
         if names.contains(&func.name) {
             return Err(AParserError(
                 format!("Global object {} has multiple definitions.", func.name),
-                FileLocation::None,
+                func.loc.clone(),
             ));
         } else {
             names.insert(&func.name);
@@ -1424,6 +1456,7 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
 
         let returntype = AType::from_type_nyd(&func.returntype, &mut gd);
         let name = func.name.clone();
+        let loc = func.loc.clone();
 
         let mut args = Vec::new();
         for arg in &func.args {
@@ -1442,6 +1475,7 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
             returntype,
             block,
             args,
+            loc,
         });
 
         gd.functions.insert(func.name.clone(), a_func.clone());
@@ -1490,6 +1524,7 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
                     &DataScope::from_func_args(func),
                     &gd,
                     &return_specs,
+                    &func.loc,
                 )?);
             }
         }
@@ -1517,6 +1552,7 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
                         &DataScope::from_func_args_this(&func, _struct.clone()),
                         &gd,
                         &return_specs,
+                        &func.loc
                     )?);
                 }
             }

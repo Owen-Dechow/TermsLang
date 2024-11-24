@@ -1,5 +1,6 @@
 mod internal_funcs;
 
+use crate::errors::FileLocation;
 use crate::rc_ref;
 use crate::{
     active_parser::{
@@ -89,11 +90,12 @@ impl Func {
                     func_ds.insert_data(nm::THIS, inst);
                 }
 
-                let result = match interpret_function(&self.0, Some(&func_ds), gd, &args)? {
-                    BlockExit::ImplicitNull => gd.null(),
-                    BlockExit::Explicit(rc) => rc,
-                    _ => panic!(),
-                };
+                let result =
+                    match interpret_function(&self.0, Some(&func_ds), gd, &args, &aobject.loc)? {
+                        BlockExit::ImplicitNull => gd.null(),
+                        BlockExit::Explicit(rc) => rc,
+                        _ => panic!(),
+                    };
 
                 return match &aobject.sub {
                     Some(sub) => {
@@ -157,6 +159,7 @@ impl Data {
         args: &Vec<AOperandExpression>,
         ds: &DataScope,
         gd: &GlobalData,
+        loc: &FileLocation,
     ) -> Result<Rc<RefCell<Self>>, RuntimeError> {
         match *_type.borrow() {
             AType::ArrayObject(..) => Ok(rc_ref!(Data::ArrayObject(Array(rc_ref!(Vec::new()))))),
@@ -180,6 +183,7 @@ impl Data {
                         Some(&func_ds),
                         gd,
                         &func_args,
+                        loc,
                     )?;
 
                     return Ok(data);
@@ -206,7 +210,7 @@ impl Data {
                             func_args.push(interpret_operand_expression(arg, ds, gd)?);
                         }
 
-                        interpret_function(func, Some(&func_ds), gd, &func_args)?;
+                        interpret_function(func, Some(&func_ds), gd, &func_args, loc)?;
                     }
 
                     return Ok(data);
@@ -404,7 +408,7 @@ fn interpret_operand_expression(
         AOperandExpressionValue::Object(aobject) => ds.resolve_aobject(aobject, gd, ds),
         AOperandExpressionValue::Literal(aliteral) => Ok(Data::from_aliteral(aliteral, gd)),
         AOperandExpressionValue::Create { _type, args } => {
-            Data::create_new(_type.clone(), args, ds, gd)
+            Data::create_new(_type.clone(), args, ds, gd, &operand_expression.loc)
         }
     }
 }
@@ -541,6 +545,7 @@ fn interpret_function(
     parent_ds: Option<&DataScope>,
     gd: &GlobalData,
     args: &[Rc<RefCell<Data>>],
+    internal_loc: &FileLocation,
 ) -> Result<BlockExit, RuntimeError> {
     let mut ds = match parent_ds {
         Some(parent_ds) => parent_ds.create_child(),
@@ -549,7 +554,9 @@ fn interpret_function(
     ds.add_arglist(args, func);
 
     return match &func.block {
-        AFuncBlock::Internal => internal_funcs::interpret_function(func, parent_ds, gd, args),
+        AFuncBlock::Internal => {
+            internal_funcs::interpret_function(func, parent_ds, gd, args, internal_loc)
+        }
         AFuncBlock::TermsLang(termblock) => interpret_termblock(&termblock.borrow(), &ds, gd),
         AFuncBlock::InternalArray => {
             internal_funcs::array_internals::interpret_function(func, parent_ds, gd, args)
@@ -557,7 +564,10 @@ fn interpret_function(
     };
 }
 
-pub fn interpret(program: AProgram, args: Args) -> Result<(), RuntimeError> {
+pub fn interpret(
+    program: AProgram,
+    args: Args
+) -> Result<(), RuntimeError> {
     let mut gd = GlobalData::new(program.root_types);
 
     for _struct in &program.structs {
@@ -584,7 +594,7 @@ pub fn interpret(program: AProgram, args: Args) -> Result<(), RuntimeError> {
 
         let args = rc_ref!(Data::ArrayObject(commandline_args));
 
-        interpret_function(&main, None, &gd, &[args])?;
+        interpret_function(&main, None, &gd, &[args], &FileLocation::None)?;
     }
 
     return Ok(());

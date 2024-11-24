@@ -105,6 +105,7 @@ pub struct Function {
     pub returntype: Type,
     pub args: Vec<VarSigniture>,
     pub block: TermBlock,
+    pub loc: FileLocation,
 }
 
 #[derive(Debug, Clone)]
@@ -112,6 +113,7 @@ pub struct Struct {
     pub name: String,
     pub properties: Vec<VarSigniture>,
     pub methods: Vec<Function>,
+    pub loc: FileLocation,
 }
 
 #[derive(Debug, Clone)]
@@ -148,8 +150,8 @@ pub enum Term {
         conditional: OperandExpression,
         block: TermBlock,
     },
-    Break,
-    Continue,
+    Break(FileLocation),
+    Continue(FileLocation),
     Call {
         value: OperandExpression,
     },
@@ -386,7 +388,7 @@ fn parse_term(
     if let Token(TokenType::KeyWord(KeyWord::Break), _) = lead_token {
         return match token_stream.advance() {
             Some(token) => match token.0 {
-                TokenType::Terminate => Ok(Term::Break),
+                TokenType::Terminate => Ok(Term::Break(token.1.clone())),
                 _ => {
                     return Err(ParserError(
                         "Unexpected token at after break".to_string(),
@@ -407,7 +409,7 @@ fn parse_term(
     if let Token(TokenType::KeyWord(KeyWord::Continue), _) = lead_token {
         return match token_stream.advance() {
             Some(token) => match token.0 {
-                TokenType::Terminate => Ok(Term::Continue),
+                TokenType::Terminate => Ok(Term::Continue(token.1.clone())),
                 _ => {
                     return Err(ParserError(
                         "Unexpected token at after continue".to_string(),
@@ -443,9 +445,9 @@ fn parse_func(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Function
     let returntype = parse_type::parse_type(token_stream, file)?;
 
     // Get identity of function
-    let name = match token_stream.advance().cloned() {
+    let (name, loc) = match token_stream.advance().cloned() {
         Some(op) => match op.0 {
-            TokenType::Identity(id) => id,
+            TokenType::Identity(id) => (id, op.1),
             _ => {
                 return Err(ParserError(
                     "Unexpected token instead of function name".to_string(),
@@ -461,7 +463,7 @@ fn parse_func(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Function
         }
     };
 
-    // Burn identity arg separator in function signiture
+    // Burn identity arg separator in function signature
     let args = match token_stream.advance() {
         Some(Token(TokenType::Operator(Operator::Colon), _)) => true,
         Some(Token(TokenType::Operator(Operator::OpenBlock), _)) => false,
@@ -548,14 +550,15 @@ fn parse_func(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Function
         returntype,
         args,
         block,
+        loc,
     });
 }
 
 // Parse struct
 fn parse_struct(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Struct, ParserError> {
-    let name = match token_stream.advance().cloned() {
+    let (name, loc) = match token_stream.advance().cloned() {
         Some(op) => match op.0 {
-            TokenType::Identity(id) => id,
+            TokenType::Identity(id) => (id, op.1),
             _ => {
                 return Err(ParserError(
                     "Unexpected token in place of class name".to_string(),
@@ -645,6 +648,7 @@ fn parse_struct(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Struct
         name,
         properties,
         methods,
+        loc,
     });
 }
 
@@ -722,17 +726,32 @@ fn parse_program(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Progr
                         match &token.0 {
                             TokenType::Identity(id) => {
                                 objects.push(id.clone());
-                                
+
                                 match token_stream.advance() {
                                     Some(token) => match token.0 {
                                         TokenType::Operator(Operator::Comma) => continue,
                                         TokenType::KeyWord(KeyWord::Of) => break,
-                                        _ => return Err(ErrType::Parser(ParserError("Unexpected token in import.".to_owned(), token.1.clone())))
+                                        _ => {
+                                            return Err(ErrType::Parser(ParserError(
+                                                "Unexpected token in import.".to_owned(),
+                                                token.1.clone(),
+                                            )))
+                                        }
                                     },
-                                    None => return Err(ErrType::Parser(ParserError("Expected import file.".to_owned(), FileLocation::End { file: file.clone() })))
+                                    None => {
+                                        return Err(ErrType::Parser(ParserError(
+                                            "Expected import file.".to_owned(),
+                                            FileLocation::End { file: file.clone() },
+                                        )))
+                                    }
                                 }
                             }
-                            _ => return Err(ErrType::Parser(ParserError("Expected object name to import.".to_owned(), token.1.clone())))
+                            _ => {
+                                return Err(ErrType::Parser(ParserError(
+                                    "Expected object name to import.".to_owned(),
+                                    token.1.clone(),
+                                )))
+                            }
                         }
                     }
 
@@ -786,7 +805,13 @@ fn parse_program(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Progr
                         module.push(' ');
                         module
                     };
-                    let lex_out = match lexer::lex(&module, false, &path, &path.to_str().unwrap(), &objects) {
+                    let lex_out = match lexer::lex(
+                        &module,
+                        false,
+                        &path,
+                        &format!("{}::", path.to_string_lossy()),
+                        &objects,
+                    ) {
                         Ok(ok) => ok,
                         Err(err) => return Err(ErrType::Lexer(err)),
                     };
