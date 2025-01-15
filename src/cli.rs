@@ -13,7 +13,16 @@ pub enum Command {
     Run {
         // File containing entry function.
         file: PathBuf,
-        
+
+        // Command line arguments
+        args: Vec<String>,
+    },
+
+    // Run a program
+    Debug {
+        // File containing entry function.
+        file: PathBuf,
+
         // Command line arguments
         args: Vec<String>,
     },

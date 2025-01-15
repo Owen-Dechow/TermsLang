@@ -3,7 +3,7 @@ Calculate Fib Program
 Created Fri Aug 23, 2024
 "
 
-func int realFib: int n {
+func int fib: int n {
     if n <= 1 {
         return n ~
     } else {
@@ -11,10 +11,6 @@ func int realFib: int n {
     }
 }
 
-func int fib: int n {
-    return realFib.(n) ~
-}
-
 func null @main: str[] args {
-    println fib.(30).@str.() ~
+    println fib.(35).@str.() ~
 }

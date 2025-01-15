@@ -1,8 +1,9 @@
-mod active_parser;
-mod ainterpretor;
-mod cli;
+pub mod active_parser;
+pub mod cli;
 pub mod errors;
-mod formmatter;
+pub mod finterpretor;
+pub mod flat_ir;
+pub mod formmatter;
 pub mod lexer;
 pub mod parser;
 
@@ -13,8 +14,8 @@ use std;
 fn main() {
     let args = cli::Args::parse();
 
-    match args.cmd {
-        cli::Command::Run { file, args } => {
+    match &args.cmd {
+        cli::Command::Debug { file, .. } | cli::Command::Run { file, .. } => {
             let program = {
                 let mut program = match std::fs::read_to_string(&file) {
                     Ok(program) => program,
@@ -60,13 +61,16 @@ fn main() {
                 }
             };
 
-            let _interperet_result = match ainterpretor::interpret(aparse_out, args) {
-                Ok(out) => out,
-                Err(err) => {
-                    println!("{}", err.prettify());
-                    return;
+            let flat_ir_out = flat_ir::flatten(&aparse_out);
+            match &args.cmd {
+                cli::Command::Run { args, .. } => {
+                    finterpretor::interpret(&flat_ir_out, args, false)
                 }
-            };
+                cli::Command::Debug { args, .. } => {
+                    finterpretor::interpret(&flat_ir_out, args, true)
+                }
+                _ => panic!(),
+            }
         }
         cli::Command::Format { file } => {
             let program = {
@@ -96,7 +100,8 @@ fn main() {
                     ManagerError(
                         format!("Could not write to program file. | {err}"),
                         FileLocation::None,
-                    ).prettify()
+                    )
+                    .prettify()
                 );
 
                 return;

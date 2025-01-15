@@ -19,6 +19,18 @@ use std::{
     rc::Rc,
 };
 
+pub struct GlobalCounter(u32);
+impl GlobalCounter {
+    pub fn new() -> Self {
+        Self(0)
+    }
+
+    pub fn next(&mut self) -> u32 {
+        self.0 += 1;
+        return self.0;
+    }
+}
+
 struct GlobalData {
     structs: HashMap<String, Rc<AStruct>>,
     functions: HashMap<String, Rc<AFunc>>,
@@ -31,7 +43,7 @@ struct GlobalData {
     null_type: Rc<AStruct>,
 }
 impl GlobalData {
-    fn new() -> Self {
+    fn new(gc: &mut GlobalCounter) -> Self {
         let mut new = GlobalData {
             structs: HashMap::new(),
             functions: HashMap::new(),
@@ -64,6 +76,7 @@ impl GlobalData {
                 (nm::F_LT, nm::BOOL, &[nm::INT]),
                 (nm::F_LTEQ, nm::BOOL, &[nm::INT]),
             ],
+            gc,
         );
         new.null_type = new.add_root_struct(
             nm::NULL,
@@ -75,6 +88,7 @@ impl GlobalData {
                 (nm::F_BOOL, nm::BOOL, &[]),
                 (nm::F_EQ, nm::BOOL, &[nm::NULL]),
             ],
+            gc,
         );
         new.float_type = new.add_root_struct(
             nm::FLOAT,
@@ -96,6 +110,7 @@ impl GlobalData {
                 (nm::F_LT, nm::BOOL, &[nm::FLOAT]),
                 (nm::F_LTEQ, nm::BOOL, &[nm::FLOAT]),
             ],
+            gc,
         );
         new.bool_type = new.add_root_struct(
             nm::BOOL,
@@ -109,6 +124,7 @@ impl GlobalData {
                 (nm::F_AND, nm::BOOL, &[]),
                 (nm::F_OR, nm::BOOL, &[]),
             ],
+            gc,
         );
         new.string_type = new.add_root_struct(
             nm::STRING,
@@ -123,9 +139,10 @@ impl GlobalData {
                 (nm::F_MOD, nm::STRING, &[nm::STRING]),
                 (nm::F_EQ, nm::BOOL, &[nm::STRING]),
             ],
+            gc,
         );
 
-        new.add_root_function(nm::F_READLN, new.string_type.clone());
+        new.add_root_function(nm::F_READLN, new.string_type.clone(), gc);
 
         return new;
     }
@@ -143,7 +160,12 @@ impl GlobalData {
         )
     }
 
-    fn add_root_struct(&mut self, name: &str, funcs: &[(&str, &str, &[&str])]) -> Rc<AStruct> {
+    fn add_root_struct(
+        &mut self,
+        name: &str,
+        funcs: &[(&str, &str, &[&str])],
+        gc: &mut GlobalCounter,
+    ) -> Rc<AStruct> {
         let mut a_funcs = HashMap::new();
         for (func_name, func_return, func_args) in funcs {
             let mut args = Vec::new();
@@ -162,6 +184,7 @@ impl GlobalData {
                 block: AFuncBlock::Internal,
                 args,
                 loc: FileLocation::None,
+                uid: gc.next(),
             };
 
             a_funcs.insert(func_name.to_string(), a_func.into());
@@ -178,7 +201,7 @@ impl GlobalData {
         return a_struct;
     }
 
-    fn add_root_function(&mut self, name: &str, returntype: Rc<AStruct>) {
+    fn add_root_function(&mut self, name: &str, returntype: Rc<AStruct>, gc: &mut GlobalCounter) {
         self.functions.insert(
             name.to_string(),
             AFunc {
@@ -187,6 +210,7 @@ impl GlobalData {
                 block: AFuncBlock::Internal,
                 args: Vec::new(),
                 loc: FileLocation::None,
+                uid: gc.next(),
             }
             .into(),
         );
@@ -259,13 +283,14 @@ impl<'a> DataScope<'a> {
         &self,
         _type: &Type,
         gd: &GlobalData,
+        gc: &mut GlobalCounter,
     ) -> Result<Rc<RefCell<AType>>, AParserError> {
         match _type {
             Type::Array { _type, .. } => {
-                let a_type = Rc::try_unwrap(self.resolve_type(&_type, gd)?).unwrap();
+                let a_type = Rc::try_unwrap(self.resolve_type(&_type, gd, gc)?).unwrap();
                 return Ok(RefCell::new(AType::ArrayObject(a_type.into())).into());
             }
-            Type::Object { object } => Ok(AObject::from_object(object, self, gd)?._type),
+            Type::Object { object } => Ok(AObject::from_object(object, self, gd, gc)?._type),
         }
     }
 
@@ -488,6 +513,7 @@ impl AObject {
         object: &Object,
         ds: &DataScope,
         gd: &GlobalData,
+        gc: &mut GlobalCounter,
     ) -> Result<AObject, AParserError> {
         let (_type, id) = match &object.kind {
             ObjectType::Identity(id) => (ds.resolve_id(id, gd, &object.loc)?, id),
@@ -501,6 +527,7 @@ impl AObject {
                 &_type.borrow(),
                 ds,
                 gd,
+                gc,
             )?))
         } else {
             None
@@ -519,17 +546,24 @@ impl AObject {
         parent_type: &AType,
         ds: &DataScope,
         gd: &GlobalData,
+        gc: &mut GlobalCounter,
     ) -> Result<AObject, AParserError> {
         match parent_type {
-            AType::ArrayObject(_) => AObject::from_object_sub_array(object, parent_type, ds, gd),
-            AType::StructObject(_) => AObject::from_object_sub_struct(object, parent_type, ds, gd),
+            AType::ArrayObject(_) => {
+                AObject::from_object_sub_array(object, parent_type, ds, gd, gc)
+            }
+            AType::StructObject(_) => {
+                AObject::from_object_sub_struct(object, parent_type, ds, gd, gc)
+            }
             AType::StructDefRef(_) => {
                 return Err(AParserError(
                     format!("Cannot get field or method on struct definition"),
                     object.loc.clone(),
                 ))
             }
-            AType::FuncDefRef(_) => AObject::from_object_sub_function(object, parent_type, ds, gd),
+            AType::FuncDefRef(_) => {
+                AObject::from_object_sub_function(object, parent_type, ds, gd, gc)
+            }
             _ => panic!("{:?}", parent_type),
         }
     }
@@ -539,6 +573,7 @@ impl AObject {
         parent_type: &AType,
         ds: &DataScope,
         gd: &GlobalData,
+        gc: &mut GlobalCounter,
     ) -> Result<AObject, AParserError> {
         let call = match &object.kind {
             ObjectType::Identity(_) => {
@@ -575,7 +610,7 @@ impl AObject {
 
         let mut acall = ACall { args: Vec::new() };
         for (arg, expected_type) in zip(&call.args, &func.args) {
-            let a_arg = aparse_operandexpression(arg, ds, gd)?;
+            let a_arg = aparse_operandexpression(arg, ds, gd, gc)?;
 
             if !expected_type
                 ._type
@@ -599,6 +634,7 @@ impl AObject {
                 &returntype.borrow(),
                 ds,
                 gd,
+                gc,
             )?))
         } else {
             None
@@ -617,6 +653,7 @@ impl AObject {
         parent_type: &AType,
         ds: &DataScope,
         gd: &GlobalData,
+        gc: &mut GlobalCounter,
     ) -> Result<AObject, AParserError> {
         let arr_type = match &parent_type {
             AType::ArrayObject(rc) => rc.clone(),
@@ -664,6 +701,7 @@ impl AObject {
                         block: AFuncBlock::InternalArray,
                         args,
                         loc: FileLocation::None,
+                        uid: gc.next(),
                     }
                     .into(),
                 );
@@ -678,6 +716,7 @@ impl AObject {
                             &_type.borrow(),
                             ds,
                             gd,
+                            gc,
                         )?)),
                         None => None,
                     },
@@ -708,13 +747,14 @@ impl AObject {
                         block: AFuncBlock::InternalArray,
                         args,
                         loc: FileLocation::None,
+                        uid: gc.next(),
                     }
                     .into(),
                 );
 
                 let _type = Rc::new(RefCell::new(func));
 
-                let arg = aparse_operandexpression(operand_expression, ds, gd)?;
+                let arg = aparse_operandexpression(operand_expression, ds, gd, gc)?;
 
                 let sub = match &object.sub {
                     Some(sub) => Some(Box::new(AObject::from_object_sub(
@@ -722,6 +762,7 @@ impl AObject {
                         &returntype.borrow(),
                         ds,
                         gd,
+                        gc,
                     )?)),
                     None => None,
                 };
@@ -746,6 +787,7 @@ impl AObject {
         parent_type: &AType,
         ds: &DataScope,
         gd: &GlobalData,
+        gc: &mut GlobalCounter,
     ) -> Result<AObject, AParserError> {
         let astruct = match parent_type {
             AType::StructObject(astruct) => astruct,
@@ -807,6 +849,7 @@ impl AObject {
                     &AType::FuncDefRef(func.clone()),
                     ds,
                     gd,
+                    gc,
                 )?;
 
                 (object.kind, object._type, None)
@@ -819,6 +862,7 @@ impl AObject {
                 &_type.borrow(),
                 ds,
                 gd,
+                gc,
             )?))
         } else {
             None
@@ -871,6 +915,7 @@ pub struct AFunc {
     pub block: AFuncBlock,
     pub args: Vec<AVarDef>,
     pub loc: FileLocation,
+    pub uid: u32,
 }
 
 #[derive(Debug)]
@@ -962,6 +1007,7 @@ fn aparse_operandexpression(
     operand_expression: &OperandExpression,
     ds: &DataScope,
     gd: &GlobalData,
+    gc: &mut GlobalCounter,
 ) -> Result<AOperandExpression, AParserError> {
     match &operand_expression.0 {
         OperandExpressionValue::Unary { operand, val } => {
@@ -970,7 +1016,7 @@ fn aparse_operandexpression(
                 _ => panic!(),
             };
 
-            let left = aparse_operandexpression(&val, ds, gd)?;
+            let left = aparse_operandexpression(&val, ds, gd, gc)?;
             let object = Object {
                 loc: operand.1.clone(),
                 kind: ObjectType::Identity(func.to_owned()),
@@ -981,7 +1027,7 @@ fn aparse_operandexpression(
                 })),
             };
 
-            let right = AObject::from_object_sub(&object, &left._type.borrow(), ds, gd)?;
+            let right = AObject::from_object_sub(&object, &left._type.borrow(), ds, gd, gc)?;
 
             Ok(AOperandExpression {
                 _type: right.bottom_type().clone(),
@@ -1013,7 +1059,7 @@ fn aparse_operandexpression(
                 TokenType::Operator(Operator::Or) => nm::F_OR,
                 _ => panic!(),
             };
-            let left = aparse_operandexpression(&left, ds, gd)?;
+            let left = aparse_operandexpression(&left, ds, gd, gc)?;
             let object = Object {
                 loc: operand.1.clone(),
                 kind: ObjectType::Identity(func.to_owned()),
@@ -1026,7 +1072,7 @@ fn aparse_operandexpression(
                 })),
             };
 
-            let right = AObject::from_object_sub(&object, &left._type.borrow(), ds, gd)?;
+            let right = AObject::from_object_sub(&object, &left._type.borrow(), ds, gd, gc)?;
 
             Ok(AOperandExpression {
                 _type: right.bottom_type(),
@@ -1038,9 +1084,9 @@ fn aparse_operandexpression(
             })
         }
         OperandExpressionValue::Dot { left, right } => {
-            let left = aparse_operandexpression(&left, ds, gd)?;
+            let left = aparse_operandexpression(&left, ds, gd, gc)?;
             let loc = left.loc.clone();
-            let right = AObject::from_object_sub(&right, &left._type.borrow(), ds, gd)?;
+            let right = AObject::from_object_sub(&right, &left._type.borrow(), ds, gd, gc)?;
             Ok(AOperandExpression {
                 _type: right.bottom_type(),
                 value: AOperandExpressionValue::Dot {
@@ -1060,7 +1106,7 @@ fn aparse_operandexpression(
             });
         }
         OperandExpressionValue::Object(obj) => {
-            let a_object = AObject::from_object(&obj, ds, gd)?;
+            let a_object = AObject::from_object(&obj, ds, gd, gc)?;
             let loc = a_object.loc.clone();
 
             return Ok(AOperandExpression {
@@ -1070,7 +1116,7 @@ fn aparse_operandexpression(
             });
         }
         OperandExpressionValue::Create(create) => {
-            let _type = ds.resolve_type(&create.kind, gd)?;
+            let _type = ds.resolve_type(&create.kind, gd, gc)?;
             let new_method = match *_type.borrow() {
                 AType::StructDefRef(ref rc) => rc.methods.get(nm::F_NEW).cloned(),
                 AType::ArrayObject(..) => None,
@@ -1081,7 +1127,7 @@ fn aparse_operandexpression(
                 let mut args = Vec::new();
 
                 for (arg, argdef) in zip(&create.args.args, &new_method.args) {
-                    let arg = aparse_operandexpression(&arg, ds, gd)?;
+                    let arg = aparse_operandexpression(&arg, ds, gd, gc)?;
 
                     if !argdef
                         ._type
@@ -1136,6 +1182,7 @@ fn aparse_termblock(
     block: &TermBlock,
     parent_ds: &DataScope,
     gd: &GlobalData,
+    gc: &mut GlobalCounter,
     return_opts: &ReturnOpts,
     loc: &FileLocation,
 ) -> Result<ATermBlock, AParserError> {
@@ -1146,7 +1193,7 @@ fn aparse_termblock(
     for (term_idx, term) in block.terms.iter().enumerate() {
         let a_term = match term {
             Term::Print { ln, operand_block } => {
-                let value = aparse_operandexpression(operand_block, &ds, gd)?;
+                let value = aparse_operandexpression(operand_block, &ds, gd, gc)?;
 
                 if !AType::from_astruct(gd.string_type.clone())
                     .borrow()
@@ -1165,8 +1212,8 @@ fn aparse_termblock(
                 vartype,
                 value,
             } => {
-                let a_type = ds.resolve_type(vartype, gd)?;
-                let a_value = aparse_operandexpression(value, &ds, gd)?;
+                let a_type = ds.resolve_type(vartype, gd, gc)?;
+                let a_value = aparse_operandexpression(value, &ds, gd, gc)?;
 
                 if !a_type
                     .borrow()
@@ -1188,7 +1235,7 @@ fn aparse_termblock(
                 }
             }
             Term::Return { value } => {
-                let value = aparse_operandexpression(value, &ds, gd)?;
+                let value = aparse_operandexpression(value, &ds, gd, gc)?;
                 if !return_opts
                     .expected_type
                     .borrow()
@@ -1260,8 +1307,8 @@ fn aparse_termblock(
                     _ => panic!(),
                 };
 
-                let value = aparse_operandexpression(&operand_expression, &ds, gd)?;
-                let var = AObject::from_object(var, &ds, gd)?;
+                let value = aparse_operandexpression(&operand_expression, &ds, gd, gc)?;
+                let var = AObject::from_object(var, &ds, gd, gc)?;
 
                 if !AType::instance_type_match(&var.bottom_type().borrow(), &value._type.borrow()) {
                     return Err(AParserError(
@@ -1277,7 +1324,7 @@ fn aparse_termblock(
                 block,
                 else_block,
             } => {
-                let conditional = aparse_operandexpression(conditional, &ds, gd)?;
+                let conditional = aparse_operandexpression(conditional, &ds, gd, gc)?;
                 if !AStruct::astruct_type_object_match(&gd.bool_type, &conditional._type.borrow()) {
                     return Err(AParserError(
                         format!(
@@ -1294,8 +1341,8 @@ fn aparse_termblock(
                     return_opts.requirement_free_opts()
                 };
 
-                let block = aparse_termblock(block, &ds, gd, &return_opts, loc)?;
-                let else_block = aparse_termblock(else_block, &ds, gd, &return_opts, loc)?;
+                let block = aparse_termblock(block, &ds, gd, gc, &return_opts, loc)?;
+                let else_block = aparse_termblock(else_block, &ds, gd, gc, &return_opts, loc)?;
 
                 ATerm::If {
                     conditional,
@@ -1317,11 +1364,11 @@ fn aparse_termblock(
                         .to_type_instance(),
                 );
 
-                let conditional = aparse_operandexpression(conditional, &ds, gd)?;
+                let conditional = aparse_operandexpression(conditional, &ds, gd, gc)?;
 
                 let return_opts = return_opts.requirement_free_opts().loop_opts();
 
-                let block = aparse_termblock(block, &ds, gd, &return_opts, loc)?;
+                let block = aparse_termblock(block, &ds, gd, gc, &return_opts, loc)?;
 
                 ATerm::Loop {
                     counter: counter.to_string(),
@@ -1329,7 +1376,7 @@ fn aparse_termblock(
                     block,
                 }
             }
-            Term::Break(loc)=> {
+            Term::Break(loc) => {
                 if return_opts.loop_returns {
                     ATerm::Break
                 } else {
@@ -1339,7 +1386,7 @@ fn aparse_termblock(
                     ));
                 }
             }
-            Term::Continue (loc)=> {
+            Term::Continue(loc) => {
                 if return_opts.loop_returns {
                     ATerm::Continue
                 } else {
@@ -1350,7 +1397,7 @@ fn aparse_termblock(
                 }
             }
             Term::Call { value } => {
-                let value = aparse_operandexpression(value, &ds, gd)?;
+                let value = aparse_operandexpression(value, &ds, gd, gc)?;
                 ATerm::Call { value }
             }
         };
@@ -1377,7 +1424,8 @@ fn aparse_termblock(
 
 pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
     let mut names = HashSet::new();
-    let mut gd = GlobalData::new();
+    let mut gc = GlobalCounter::new();
+    let mut gd = GlobalData::new(&mut gc);
     let mut structs = Vec::new();
     let mut functions = Vec::new();
 
@@ -1428,6 +1476,7 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
                 block,
                 args,
                 loc,
+                uid: gc.next(),
             };
 
             methods.insert(a_method.name.to_owned(), a_method.into());
@@ -1476,6 +1525,7 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
             block,
             args,
             loc,
+            uid: gc.next(),
         });
 
         gd.functions.insert(func.name.clone(), a_func.clone());
@@ -1523,6 +1573,7 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
                     block,
                     &DataScope::from_func_args(func),
                     &gd,
+                    &mut gc,
                     &return_specs,
                     &func.loc,
                 )?);
@@ -1551,8 +1602,9 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
                         block,
                         &DataScope::from_func_args_this(&func, _struct.clone()),
                         &gd,
+                        &mut gc,
                         &return_specs,
-                        &func.loc
+                        &func.loc,
                     )?);
                 }
             }

@@ -1,13 +1,8 @@
 ""
 
-func str test {
-    if true {
-        return "Left" ~
-    } else {
-        return $() null ~
-    }
-}
 
 func null @main: str[] args {
-    cll test.() ~
+    loop i: i < 100 {
+        println "Hello World" ~
+    }
 }
