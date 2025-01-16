@@ -11,24 +11,26 @@ enum Value {
     Int(i32),
     Float(f32),
     Bool(bool),
-    Custom(HashMap<String, Value>),
+    Custom(FxHashMap<String, Value>),
     Array(Vec<Value>),
     Null,
     Ptr(u32),
 }
 impl Value {
     #[inline(always)]
-    fn string(&self) -> &String {
+    fn string<'a>(&'a self, runner: &'a Runner) -> &'a String {
         match self {
             Value::Str(string) => string,
+            Value::Ptr(to) => runner.data[to].0.string(runner),
             _ => panic!(),
         }
     }
 
     #[inline(always)]
-    fn bool(&self) -> &bool {
+    fn bool<'a>(&'a self, runner: &'a Runner) -> &'a bool {
         match self {
             Value::Bool(b) => b,
+            Value::Ptr(to) => runner.data[to].0.bool(runner),
             _ => panic!(),
         }
     }
@@ -40,6 +42,7 @@ impl Value {
             Literal::String(i) => Value::Str(i.clone()),
             Literal::Float(i) => Value::Float(*i),
             Literal::Bool(i) => Value::Bool(*i),
+            Literal::Null => Value::Null,
         }
     }
 }
@@ -169,6 +172,36 @@ impl<'a> Runner<'a> {
                     _ => panic!(),
                 }
             }
+            nms::F_EQ => {
+                let a = self.stack_pop();
+                let b = self.stack_pop();
+                let aa = self.reduct(&a);
+                let bb = self.reduct(&b);
+
+                match (aa, bb) {
+                    (Value::Int(i2), Value::Int(i1)) => self.stack.push(Value::Bool(i1 == i2)),
+                    (Value::Float(f2), Value::Float(f1)) => self.stack.push(Value::Bool(f1 == f2)),
+                    (Value::Str(s2), Value::Str(s1)) => self.stack.push(Value::Bool(s1 == s2)),
+                    (Value::Bool(b2), Value::Bool(b1)) => self.stack.push(Value::Bool(b2 == b1)),
+                    (Value::Null, Value::Null) => self.stack.push(Value::Bool(true)),
+                    _ => self.stack.push(Value::Bool(false)),
+                }
+            }
+            nms::F_MOD => {
+                let a = self.stack_pop();
+                let b = self.stack_pop();
+                let aa = self.reduct(&a);
+                let bb = self.reduct(&b);
+
+                match (aa, bb) {
+                    (Value::Int(i2), Value::Int(i1)) => self.stack.push(Value::Int(i1 % i2)),
+                    (Value::Float(f2), Value::Float(f1)) => self.stack.push(Value::Float(f1 % f2)),
+                    (Value::Str(s2), Value::Str(s1)) => {
+                        self.stack.push(Value::Str(s1.replace("%", s2)))
+                    }
+                    _ => panic!(),
+                }
+            }
             nms::F_STRING => {
                 let a = self.stack_pop();
                 let aa = self.reduct(&a);
@@ -181,6 +214,7 @@ impl<'a> Runner<'a> {
                     _ => panic!(),
                 }
             }
+
             _ => todo!("Operation Not Yet Implimented: {op}"),
         }
     }
@@ -195,24 +229,50 @@ impl<'a> Runner<'a> {
                 self.current_postion += 1;
             }
             CMD::Release => {
+                let preserve = match self.stack.last() {
+                    Some(Value::Ptr(to)) => *to,
+                    _ => 0,
+                };
+
                 for val in self.scopes.pop().unwrap().values() {
                     let cell = self.data.get_mut(val).unwrap();
                     cell.1 -= 1;
 
                     if cell.1 == 0 {
-                        self.data.remove(val);
+                        match *val == preserve {
+                            true => {
+                                *self.stack.last_mut().unwrap() = self.data.remove(val).unwrap().0;
+                            }
+                            false => {
+                                self.data.remove(val);
+                            }
+                        }
                     }
                 }
+
                 self.current_postion += 1;
             }
             CMD::RelaseN(n) => {
+                let preserve = match self.stack.last() {
+                    Some(Value::Ptr(to)) => *to,
+                    _ => 0,
+                };
+
                 for _ in 0..*n {
                     for val in self.scopes.pop().unwrap().values() {
                         let cell = self.data.get_mut(val).unwrap();
                         cell.1 -= 1;
 
                         if cell.1 == 0 {
-                            self.data.remove(val);
+                            match *val == preserve {
+                                true => {
+                                    *self.stack.last_mut().unwrap() =
+                                        self.data.remove(val).unwrap().0;
+                                }
+                                false => {
+                                    self.data.remove(val);
+                                }
+                            }
                         }
                     }
                 }
@@ -252,7 +312,18 @@ impl<'a> Runner<'a> {
             }
             CMD::Jump(idx) => self.current_postion = *idx,
             CMD::Push(var_adress) => match var_adress {
-                VarAdress::Index(_) => todo!(),
+                VarAdress::Index(val) => {
+                    match self.stack_pop() {
+                        Value::Ptr(to) => match &self.data[&to].0 {
+                            Value::Custom(hash_map) => self.stack.push(hash_map[val].clone()),
+                            Value::Array(vec) => todo!(),
+                            _ => panic!(),
+                        },
+                        _ => panic!(),
+                    };
+
+                    self.current_postion += 1;
+                }
                 VarAdress::Var(var) => {
                     let v = *self.get_var(var);
                     self.stack.push(Value::Ptr(v));
@@ -261,12 +332,12 @@ impl<'a> Runner<'a> {
             },
             CMD::Print => {
                 let v = self.stack_pop();
-                print!("{}", v.string());
+                print!("{}", v.string(self));
                 self.current_postion += 1;
             }
             CMD::PrintLn => {
                 let v = self.stack_pop();
-                println!("{}", v.string());
+                println!("{}", v.string(self));
                 self.current_postion += 1;
             }
             CMD::Let(n) => {
@@ -287,7 +358,7 @@ impl<'a> Runner<'a> {
                 lst.insert(n, idx);
                 self.current_postion += 1;
             }
-            CMD::XIf => match self.stack_pop().bool() {
+            CMD::XIf => match self.stack_pop().bool(self) {
                 true => self.current_postion += 2,
                 false => self.current_postion += 1,
             },
@@ -303,13 +374,31 @@ impl<'a> Runner<'a> {
                 self.stack.push(Value::from_lit(literal));
                 self.current_postion += 1;
             }
+            CMD::PushObj(fields) => {
+                let mut fmap = FxHashMap::default();
+                for field in fields {
+                    let null = Value::Null;
+                    let k = self.gc.next();
+                    self.data.insert(k, Cell(null, 1));
+                    fmap.insert(field.clone(), Value::Ptr(k));
+                }
+
+                self.stack.push(Value::Custom(fmap));
+                self.current_postion += 1;
+            }
             CMD::Burn => {
                 self.stack_pop();
-                self.current_postion -= 1;
+                self.current_postion += 1;
             }
             CMD::Update => {
                 match self.stack_pop() {
-                    Value::Ptr(to) => self.data.get_mut(&to).unwrap().0 = self.stack_pop(),
+                    Value::Ptr(to) => {
+                        let pop = self.stack_pop();
+                        self.data.get_mut(&to).unwrap().0 = match pop {
+                            Value::Ptr(to) => self.data[&to].0.clone(),
+                            _ => pop,
+                        }
+                    }
                     _ => panic!(),
                 }
                 self.current_postion += 1;

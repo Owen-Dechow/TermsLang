@@ -45,7 +45,7 @@ func null printResults: int iters {
 func null @main: str[] args {
     println "Hello World" ~
 
-    let FizzBuzz fizzy = $(20) FizzBuzz ~
+    let FizzBuzz fizzy = $(1) FizzBuzz ~
     let int iters = fizzy.run.("Fizz", "Buzz") ~
     cll printResults.(iters) ~
 }

@@ -178,12 +178,12 @@ impl<'a> Debugger<'a> {
                 match self.runner.prog.tape[self.runner.current_postion] {
                     CMD::Print => {
                         let v = self.runner.stack_pop();
-                        self.debug_out += v.string();
+                        self.debug_out += v.string(&self.runner);
                         self.runner.current_postion += 1;
                     }
                     CMD::PrintLn => {
                         let v = self.runner.stack_pop();
-                        self.debug_out += v.string();
+                        self.debug_out += v.string(&self.runner);
                         self.debug_out += "\n";
                         self.runner.current_postion += 1;
                     }

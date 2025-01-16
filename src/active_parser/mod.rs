@@ -501,7 +501,7 @@ impl Debug for AType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AObject {
     pub kind: AObjectType,
     pub sub: Option<Box<AObject>>,
@@ -884,13 +884,13 @@ impl AObject {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AObjectType {
     Identity(String),
     Call(ACall),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ACall {
     pub args: Vec<AOperandExpression>,
 }
@@ -918,7 +918,7 @@ pub struct AFunc {
     pub uid: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ALiteral {
     Int(i32),
     Float(f32),
@@ -937,14 +937,14 @@ impl ALiteral {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AOperandExpression {
     _type: Rc<RefCell<AType>>,
     pub loc: FileLocation,
     pub value: AOperandExpressionValue,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AOperandExpressionValue {
     Dot {
         left: Box<AOperandExpression>,
