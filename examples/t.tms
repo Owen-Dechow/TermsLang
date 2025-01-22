@@ -2,7 +2,7 @@
 
 
 func null @main: str[] args {
-    loop i: i < 100 {
-        println "Hello World" ~
-    }
+    let int[] a = $() int[] ~
+    cll a.@append.(1) ~
+    println a.[1].@str.() ~
 }

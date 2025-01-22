@@ -1,8 +1,10 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::active_parser::{
-    names as nms, ACall, AFunc, AFuncBlock, ALiteral, AObject, AObjectType, AOperandExpression,
-    AOperandExpressionValue, AProgram, AStruct, ATerm, ATermBlock, AType,
+use crate::{
+    active_parser::{
+        names as nms, ACall, AFunc, AFuncBlock, ALiteral, AObject, AObjectType, AOperandExpression,
+        AOperandExpressionValue, AProgram, ATerm, ATermBlock, AType,
+    }, errors::FileLocation, finterpretor::Value
 };
 
 struct ProgramBuilder {
@@ -11,15 +13,17 @@ struct ProgramBuilder {
     main_function: usize,
     non_indexed_refers: Vec<(usize, u32)>,
     non_indexed_loops: Vec<Vec<usize>>,
+    debug: bool,
 }
 impl ProgramBuilder {
-    fn new() -> Self {
+    fn new(debug: bool) -> Self {
         ProgramBuilder {
             tape: Vec::new(),
             function_idxs: HashMap::new(),
             main_function: 0,
             non_indexed_refers: Vec::new(),
             non_indexed_loops: Vec::new(),
+            debug,
         }
     }
 
@@ -32,21 +36,52 @@ impl ProgramBuilder {
         self.tape.len()
     }
 
-    fn split_scope(&mut self, defer_count: &mut u32, release_count: &mut Vec<u32>) {
-        self.push(CMD::SplitScope);
+    fn split_scope(
+        &mut self,
+        defer_count: &mut u32,
+        release_count: &mut Vec<u32>,
+        scopes: &mut Vec<Vec<String>>,
+        debug: bool,
+    ) {
+        if debug {
+            self.push(CMD::SplitScope);
+        }
+
         *defer_count += 1;
 
         if let Some(r) = release_count.last_mut() {
             *r += 1;
         }
+
+        scopes.push(Vec::new());
     }
 
-    fn release_scope(&mut self, defer_count: &mut u32, release_count: &mut Vec<u32>) {
-        self.push(CMD::Release);
-        *defer_count -= 1;
+    fn release_scope(
+        &mut self,
+        defer_count: &mut u32,
+        release_count: &mut Vec<u32>,
+        scopes: &mut Vec<Vec<String>>,
+        n: u32,
+        stop_tracking: bool,
+    ) {
+        let mut rel = Vec::new();
 
-        if let Some(r) = release_count.last_mut() {
-            *r -= 1;
+        for i in 0..n {
+            for x in &scopes[scopes.len() - (i + 1) as usize] {
+                rel.push(x.clone());
+            }
+        }
+
+        self.push(CMD::Release(rel));
+
+        if stop_tracking {
+            *defer_count -= 1;
+
+            if let Some(r) = release_count.last_mut() {
+                *r -= 1;
+            }
+
+            scopes.pop();
         }
     }
 }
@@ -58,30 +93,11 @@ pub enum VarAdress {
 }
 
 #[derive(Debug)]
-pub enum Literal {
-    Int(i32),
-    String(String),
-    Float(f32),
-    Bool(bool),
-    Null,
-}
-impl Literal {
-    fn from_aliteral(lit: &ALiteral) -> Self {
-        match lit {
-            ALiteral::Int(i) => Literal::Int(*i),
-            ALiteral::Float(i) => Literal::Float(*i),
-            ALiteral::String(i) => Literal::String(i.clone()),
-            ALiteral::Bool(i) => Literal::Bool(*i),
-        }
-    }
-}
-
-#[derive(Debug)]
 pub enum CMD {
     SplitScope,
-    Release,
-    RelaseN(u32),
-    Defer(u32),
+    Release(Vec<String>),
+    TRelease,
+    Defer,
     Jump(usize),
     Push(VarAdress),
     Print,
@@ -90,9 +106,10 @@ pub enum CMD {
     Update,
     XIf,
     Refer(usize),
-    InternalOp(String),
-    PushLit(Literal),
+    InternalOp(String, FileLocation),
+    PushLit(Value),
     PushObj(Vec<String>),
+    PushVec,
     Burn,
 }
 
@@ -100,30 +117,24 @@ pub struct FlatProgram {
     pub tape: Vec<CMD>,
     pub start_point: usize,
 }
-impl FlatProgram {
-    pub fn prettify(&self) -> String {
-        let mut string = format!("{}\n", self.start_point);
-
-        for (idx, x) in (&self.tape).into_iter().enumerate() {
-            string += &format!("{idx:5}: {x:?}\n");
-        }
-
-        return string;
-    }
-}
 
 fn add_block(
     pb: &mut ProgramBuilder,
     block: &ATermBlock,
     defer_count: &mut u32,
     release_count: &mut Vec<u32>,
+    scopes: &mut Vec<Vec<String>>,
     post_split_cmds: Option<Vec<CMD>>,
     push_this: bool,
 ) {
-    pb.split_scope(defer_count, release_count);
+    pb.split_scope(defer_count, release_count, scopes, pb.debug);
 
     if let Some(cmds) = post_split_cmds {
         for cmd in cmds {
+            if let CMD::Let(ref nm) = cmd {
+                scopes.last_mut().unwrap().push(nm.clone());
+            }
+
             pb.push(cmd);
         }
     }
@@ -131,7 +142,7 @@ fn add_block(
     match block {
         ATermBlock::A { ref terms } => {
             for term in terms {
-                add_term(pb, term, defer_count, release_count);
+                add_term(pb, term, defer_count, release_count, scopes);
             }
         }
         _ => panic!(),
@@ -141,7 +152,11 @@ fn add_block(
         pb.push(CMD::Push(VarAdress::Var(nms::THIS.to_string())));
     }
 
-    pb.release_scope(defer_count, release_count);
+    if pb.debug {
+        pb.push(CMD::TRelease);
+    }
+
+    pb.release_scope(defer_count, release_count, scopes, 1, true);
 }
 
 fn add_object(pb: &mut ProgramBuilder, object: &AObject, parent: Option<&AObject>) {
@@ -181,10 +196,10 @@ fn add_object(pb: &mut ProgramBuilder, object: &AObject, parent: Option<&AObject
                     AType::FuncDefRef(afunc) => {
                         match afunc.block {
                             AFuncBlock::Internal => {
-                                pb.push(CMD::InternalOp(afunc.name.clone()));
+                                pb.push(CMD::InternalOp(afunc.name.clone(), object.loc.clone()));
                             }
                             AFuncBlock::InternalArray => {
-                                pb.push(CMD::InternalOp(afunc.name.clone()));
+                                pb.push(CMD::InternalOp(afunc.name.clone(), object.loc.clone()));
                             }
                             AFuncBlock::TermsLang(_) => {
                                 pb.non_indexed_refers.push((pb.len(), afunc.uid));
@@ -212,10 +227,19 @@ fn add_operand_block(pb: &mut ProgramBuilder, block: &AOperandExpression) {
         }
         AOperandExpressionValue::Object(aobject) => add_object(pb, aobject, None),
         AOperandExpressionValue::Literal(aliteral) => {
-            pb.push(CMD::PushLit(Literal::from_aliteral(aliteral)));
+            let v = match aliteral {
+                ALiteral::Int(i) => Value::Int(*i),
+                ALiteral::Float(f) => Value::Float(*f),
+                ALiteral::String(s) => Value::Str(s.clone()),
+                ALiteral::Bool(b) => Value::Bool(*b),
+            };
+
+            pb.push(CMD::PushLit(v));
         }
         AOperandExpressionValue::Create { _type, args } => match &*_type.borrow() {
-            AType::ArrayObject(ref_cell) => todo!(),
+            AType::ArrayObject(..) => {
+                pb.push(CMD::PushVec);
+            }
             AType::StructDefRef(_t) => match _t.root {
                 false => {
                     pb.push(CMD::PushObj(_t.fields.keys().map(|x| x.clone()).collect()));
@@ -253,6 +277,7 @@ fn add_term(
     term: &ATerm,
     defer_count: &mut u32,
     release_count: &mut Vec<u32>,
+    scopes: &mut Vec<Vec<String>>,
 ) {
     match term {
         ATerm::Print { ln, value } => {
@@ -265,10 +290,12 @@ fn add_term(
         ATerm::DeclareVar { name, value, .. } => {
             add_operand_block(pb, value);
             pb.push(CMD::Let(name.clone()));
+            scopes.last_mut().unwrap().push(name.clone());
         }
         ATerm::Return { value } => {
             add_operand_block(pb, value);
-            pb.push(CMD::Defer(*defer_count));
+            pb.release_scope(defer_count, release_count, scopes, *defer_count, false);
+            pb.push(CMD::Defer);
         }
         ATerm::UpdateVar { value, var } => {
             add_operand_block(pb, value);
@@ -283,7 +310,7 @@ fn add_term(
             add_operand_block(pb, conditional);
             pb.push(CMD::XIf);
             let else_gt = pb.push(CMD::Jump(0));
-            add_block(pb, block, defer_count, release_count, None, false);
+            add_block(pb, block, defer_count, release_count, scopes, None, false);
             let if_gt = pb.push(CMD::Jump(0));
 
             let idx = pb.len();
@@ -291,7 +318,15 @@ fn add_term(
                 *to = idx;
             }
 
-            add_block(pb, else_block, defer_count, release_count, None, false);
+            add_block(
+                pb,
+                else_block,
+                defer_count,
+                release_count,
+                scopes,
+                None,
+                false,
+            );
 
             let idx = pb.len();
             if let CMD::Jump(ref mut to) = pb.tape[if_gt] {
@@ -307,23 +342,23 @@ fn add_term(
             conditional,
             block,
         } => {
-            pb.split_scope(defer_count, release_count);
-            pb.push(CMD::PushLit(Literal::Int(-1)));
+            pb.split_scope(defer_count, release_count, scopes, pb.debug);
+            pb.push(CMD::PushLit(Value::Int(-1)));
             pb.push(CMD::Let(counter.clone()));
             let loop_start = pb.len();
 
             release_count.push(0);
 
-            pb.push(CMD::PushLit(Literal::Int(1)));
+            pb.push(CMD::PushLit(Value::Int(1)));
             pb.push(CMD::Push(VarAdress::Var(counter.clone())));
-            pb.push(CMD::InternalOp(nms::F_ADD.to_string()));
+            pb.push(CMD::InternalOp(nms::F_ADD.to_string(), FileLocation::None));
             pb.push(CMD::Push(VarAdress::Var(counter.clone())));
             pb.push(CMD::Update);
             add_operand_block(pb, conditional);
             pb.push(CMD::XIf);
             pb.non_indexed_loops.push(vec![pb.len()]);
             pb.push(CMD::Jump(1));
-            add_block(pb, block, defer_count, release_count, None, false);
+            add_block(pb, block, defer_count, release_count, scopes, None, false);
             pb.push(CMD::Jump(loop_start));
             release_count.pop().unwrap();
 
@@ -339,16 +374,28 @@ fn add_term(
                 }
             }
 
-            pb.release_scope(defer_count, release_count);
+            pb.release_scope(defer_count, release_count, scopes, 1, false);
         }
         ATerm::Break => {
-            pb.push(CMD::RelaseN(*release_count.last().unwrap()));
+            pb.release_scope(
+                defer_count,
+                release_count,
+                scopes,
+                *release_count.last().unwrap(),
+                false,
+            );
             let idx = pb.len();
             pb.non_indexed_loops.last_mut().unwrap().push(idx);
             pb.push(CMD::Jump(1));
         }
         ATerm::Continue => {
-            pb.push(CMD::RelaseN(*release_count.last().unwrap()));
+            pb.release_scope(
+                defer_count,
+                release_count,
+                scopes,
+                *release_count.last().unwrap(),
+                false,
+            );
             let idx = pb.len();
             pb.non_indexed_loops.last_mut().unwrap().push(idx);
             pb.push(CMD::Jump(0));
@@ -375,12 +422,15 @@ fn add_function(pb: &mut ProgramBuilder, func: &AFunc, push_this: bool, return_t
         post_split_cmds.push(CMD::Let(nms::THIS.to_string()));
     }
 
+    let mut scopes = Vec::new();
+
     match &func.block {
         AFuncBlock::TermsLang(block) => add_block(
             pb,
             &block.borrow(),
             &mut defer_count,
             &mut Vec::new(),
+            &mut scopes,
             Some(post_split_cmds),
             return_this,
         ),
@@ -389,15 +439,15 @@ fn add_function(pb: &mut ProgramBuilder, func: &AFunc, push_this: bool, return_t
 
     if let AType::StructDefRef(struct_obj) = &*func.returntype.borrow() {
         if struct_obj.name == nms::NULL && struct_obj.root && !return_this {
-            pb.push(CMD::PushLit(Literal::Null));
+            pb.push(CMD::PushLit(Value::Null));
         }
     }
 
-    pb.push(CMD::Defer(defer_count));
+    pb.push(CMD::Defer);
 }
 
-pub fn flatten(program: &AProgram) -> FlatProgram {
-    let mut pb = ProgramBuilder::new();
+pub fn flatten(program: &AProgram, debug: bool) -> FlatProgram {
+    let mut pb = ProgramBuilder::new(debug);
 
     for func in &program.functions {
         add_function(&mut pb, func, false, false);

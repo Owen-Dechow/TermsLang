@@ -61,15 +61,20 @@ fn main() {
                 }
             };
 
-            let flat_ir_out = flat_ir::flatten(&aparse_out);
-            match &args.cmd {
+            let interpretor_out = match &args.cmd {
                 cli::Command::Run { args, .. } => {
+                    let flat_ir_out = flat_ir::flatten(&aparse_out, false);
                     finterpretor::interpret(&flat_ir_out, args, false)
                 }
                 cli::Command::Debug { args, .. } => {
+                    let flat_ir_out = flat_ir::flatten(&aparse_out, true);
                     finterpretor::interpret(&flat_ir_out, args, true)
                 }
                 _ => panic!(),
+            };
+
+            if let Err(err) = interpretor_out {
+                println!("{}", err.prettify());
             }
         }
         cli::Command::Format { file } => {

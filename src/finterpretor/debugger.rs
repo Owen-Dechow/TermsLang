@@ -1,4 +1,4 @@
-use crate::flat_ir::CMD;
+use crate::{errors::RuntimeError, flat_ir::CMD};
 use colored::Colorize;
 use std::{io::stdin, process::Command};
 
@@ -11,14 +11,14 @@ pub struct Debugger<'a> {
     complete: bool,
     padding: Vec<usize>,
 }
-impl<'a> Debugger<'a> {
-    pub fn new(runner: Runner<'a>) -> Self {
+impl Debugger<'_> {
+    pub fn new<'a>(runner: Runner<'a>) -> Debugger<'a> {
         let mut pad = 0;
         let mut padding = Vec::new();
 
         for x in &runner.prog.tape {
             pad -= match x {
-                CMD::Release => 1,
+                CMD::TRelease => 1,
                 _ => 0,
             };
 
@@ -30,7 +30,7 @@ impl<'a> Debugger<'a> {
             };
         }
 
-        return Self {
+        return Debugger {
             debug_out: String::new(),
             runner,
             commands_run: 0,
@@ -46,8 +46,8 @@ impl<'a> Debugger<'a> {
         let program_string =
             box_string(self.get_program_string(term_size.1 - 6), 50, "Program Tape");
         let stack_string = box_string(self.get_stack_string(), 30, "Stack");
-        let data_string = box_string(self.get_data_string(), 30, "Heap");
         let refer_string = box_string(self.get_refer_string(), 30, "Refer Stack");
+        let data_string = box_string(self.get_data_string(), 30, "Heap Data");
         let scopes_string = box_string(self.get_scopes_string(), 30, "Scope Pointers");
         let std_out = box_string(self.get_std_out_string(term_size.1 - 12), 50, "STD Out");
         let stats_string = box_string(self.get_stats_string(), 50, "Stats");
@@ -58,7 +58,6 @@ impl<'a> Debugger<'a> {
             stack_string,
             join_rows(data_string, join_rows(refer_string, scopes_string)),
         );
-
         println!("{}", join_cols(col1, join_cols(col2, col3)));
 
         println!("[x] to exit [enter] to continue: ");
@@ -97,6 +96,10 @@ impl<'a> Debugger<'a> {
 
         for idx in top..bottom {
             let x = &self.runner.prog.tape[idx];
+            let x = match x {
+                CMD::InternalOp(op, _) => format!("InternalOp({})", op),
+                _ => format!("{x:?}"),
+            };
             let padding = self.padding[idx];
             let idx = match self.runner.current_postion == idx {
                 true => format!(">> {idx}",),
@@ -104,7 +107,7 @@ impl<'a> Debugger<'a> {
             };
 
             string += &format!(
-                "{}{idx}: {}{x:?}\n",
+                "{}{idx}: {}{x}\n",
                 String::from(" ").repeat(6 - string_width(&format!("{idx}"))),
                 String::from("|  ").repeat(padding),
             );
@@ -123,21 +126,21 @@ impl<'a> Debugger<'a> {
         return string;
     }
 
-    fn get_data_string(&self) -> String {
+    fn get_refer_string(&self) -> String {
         let mut string = String::new();
 
-        for (key, val) in &self.runner.data {
-            string += &format!("{} ({}): {:?}\n", key, val.1, val.0);
+        for r in &self.runner.refer_stack {
+            string += &format!("{r:?}\n");
         }
 
         return string;
     }
 
-    fn get_refer_string(&self) -> String {
+    fn get_data_string(&self) -> String {
         let mut string = String::new();
 
-        for r in &self.runner.refer_stack {
-            string += &format!("{r}\n");
+        for (key, val) in &self.runner.data.get_valid_data() {
+            string += &format!("{} ({}): {:?}\n", key, val.1, val.0);
         }
 
         return string;
@@ -146,13 +149,16 @@ impl<'a> Debugger<'a> {
     fn get_scopes_string(&self) -> String {
         let mut string = String::new();
 
-        for scope in &self.runner.scopes {
-            string += "(";
-            for (key, val) in scope {
-                string += &format!("{}: {:?}\n", key, val);
+        for (key, ptrs) in &self.runner.scopes {
+            string += &format!("{}:\n", key);
+            for ptr in ptrs.into_iter().rev().enumerate() {
+                string += &format!(" {}", ptr.1);
+                if ptr.0 < ptrs.len() - 1 {
+                    string += ","
+                } else {
+                    string += "\n"
+                }
             }
-            string = string.strip_suffix("\n").or(Some("(")).unwrap().to_string();
-            string += ")\n";
         }
 
         return string;
@@ -165,7 +171,7 @@ impl<'a> Debugger<'a> {
         )
     }
 
-    pub fn debug(&mut self) {
+    pub fn debug(&mut self) -> Result<(), RuntimeError> {
         loop {
             self.print_state();
 
@@ -174,6 +180,7 @@ impl<'a> Debugger<'a> {
             if input.trim().to_lowercase() == "x" {
                 break;
             }
+
             if !self.complete {
                 match self.runner.prog.tape[self.runner.current_postion] {
                     CMD::Print => {
@@ -188,13 +195,15 @@ impl<'a> Debugger<'a> {
                         self.runner.current_postion += 1;
                     }
                     _ => {
-                        self.complete = self.runner.run_command();
+                        self.complete = self.runner.run_command()?;
                     }
                 }
 
                 self.commands_run += 1;
             }
         }
+
+        return Ok(());
     }
 }
 

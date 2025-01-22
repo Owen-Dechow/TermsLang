@@ -40,11 +40,10 @@ macro_rules! prettify_macro {
                        msg += &format!("\n{: >5}|", line_num + 1);
                        
                        if line_num == *start_line {
-
                             let start_col = if *start_col == 0 { 0 } else { start_col - 1 };
 
                             let good1 = &line[..start_col];
-                            let (bad, good2) = if *end_col == start_col {
+                            let (bad, good2) = if end_line == start_line {
                                 let bad = &line[start_col..*end_col];
                                 let good2 = &line[*end_col..];
 

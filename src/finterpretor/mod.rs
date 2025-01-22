@@ -1,12 +1,15 @@
+mod data;
 mod debugger;
+use std::io::stdin;
 
 use crate::active_parser::names as nms;
-use crate::flat_ir::{FlatProgram, Literal, VarAdress, CMD};
+use crate::errors::{FileLocation, RuntimeError};
+use crate::flat_ir::{FlatProgram, VarAdress, CMD};
+use data::Data;
 use rustc_hash::FxHashMap;
-use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
-enum Value {
+pub enum Value {
     Str(String),
     Int(i32),
     Float(f32),
@@ -14,10 +17,10 @@ enum Value {
     Custom(FxHashMap<String, Value>),
     Array(Vec<Value>),
     Null,
-    Ptr(u32),
+    Ptr(usize),
 }
 impl Value {
-    #[inline(always)]
+    #[cfg_attr(feature = "inline", inline(always))]
     fn string<'a>(&'a self, runner: &'a Runner) -> &'a String {
         match self {
             Value::Str(string) => string,
@@ -26,7 +29,7 @@ impl Value {
         }
     }
 
-    #[inline(always)]
+    #[cfg_attr(feature = "inline", inline(always))]
     fn bool<'a>(&'a self, runner: &'a Runner) -> &'a bool {
         match self {
             Value::Bool(b) => b,
@@ -35,82 +38,83 @@ impl Value {
         }
     }
 
-    #[inline(always)]
-    fn from_lit(lit: &Literal) -> Self {
-        match lit {
-            Literal::Int(i) => Value::Int(*i),
-            Literal::String(i) => Value::Str(i.clone()),
-            Literal::Float(i) => Value::Float(*i),
-            Literal::Bool(i) => Value::Bool(*i),
-            Literal::Null => Value::Null,
+    #[cfg_attr(feature = "inline", inline(always))]
+    fn int<'a>(&'a self, runner: &'a Runner) -> &'a i32 {
+        match self {
+            Value::Int(i) => i,
+            Value::Ptr(to) => &runner.data[to].0.int(runner),
+            _ => panic!(),
         }
     }
 }
 
-struct GlobalCounter(u32);
+struct GlobalCounter(usize);
 impl GlobalCounter {
     fn new() -> Self {
         Self(0)
     }
 
-    #[inline(always)]
-    fn next(&mut self) -> u32 {
+    #[cfg_attr(feature = "inline", inline(always))]
+    fn next(&mut self) -> usize {
         self.0 += 1;
         return self.0;
     }
 }
 
-#[derive(Debug)]
-struct Cell(Value, u32);
+#[derive(Clone)]
+pub struct Cell(Value, usize);
 
 struct Runner<'a> {
     current_postion: usize,
     stack: Vec<Value>,
     refer_stack: Vec<usize>,
     prog: &'a FlatProgram,
-    scopes: Vec<FxHashMap<&'a String, u32>>,
-    data: FxHashMap<u32, Cell>,
+    scopes: FxHashMap<&'a String, Vec<usize>>,
+    data: Data,
     gc: GlobalCounter,
 }
 impl<'a> Runner<'a> {
     fn new(prog: &'a FlatProgram, args: &Vec<String>) -> Self {
-        let args = args.into_iter().map(|x| Value::Str(x.clone())).collect();
+        let mut data = Data::default();
+        let mut ptr_args = Vec::new();
+        let mut gc = GlobalCounter::new();
+
+        for arg in args {
+            let key = gc.next();
+            data.insert(key, Cell(Value::Str(arg.clone()), 1));
+            ptr_args.push(Value::Ptr(key));
+        }
 
         Self {
             current_postion: prog.start_point,
-            stack: vec![Value::Array(args)],
+            stack: vec![Value::Array(ptr_args)],
             refer_stack: Vec::new(),
-            scopes: Vec::new(),
+            scopes: FxHashMap::default(),
             prog,
-            gc: GlobalCounter::new(),
-            data: FxHashMap::default(),
+            gc,
+            data,
         }
     }
 
-    #[inline(always)]
+    #[cfg_attr(feature = "inline", inline(always))]
     fn stack_pop(&mut self) -> Value {
         match self.stack.pop() {
             Some(s) => s,
             None => panic!("Stack should not be empty"),
         }
     }
-    fn run(&mut self) {
-        while !self.run_command() {}
+
+    fn run(&mut self) -> Result<(), RuntimeError> {
+        while !self.run_command()? {}
+        return Ok(());
     }
 
-    #[inline(always)]
-    fn get_var(&self, var: &String) -> &u32 {
-        let mut idx = self.scopes.len() - 1;
-
-        loop {
-            match self.scopes[idx].get(var) {
-                Some(idx) => return idx,
-                None => idx -= 1,
-            }
-        }
+    #[cfg_attr(feature = "inline", inline(always))]
+    fn get_var(&self, var: &String) -> &usize {
+        self.scopes[var].last().unwrap()
     }
 
-    #[inline(always)]
+    #[cfg_attr(feature = "inline", inline(always))]
     fn reduct(&self, v: &'a Value) -> &Value {
         match &v {
             Value::Ptr(to) => &self.data[to].0,
@@ -118,9 +122,17 @@ impl<'a> Runner<'a> {
         }
     }
 
-    #[inline(always)]
-    fn internal_op(&mut self, op: &str) {
-        match op {
+    #[cfg_attr(feature = "inline", inline(always))]
+    fn mut_reduct<'b>(&'b mut self, v: &'b mut Value) -> &'b mut Value {
+        match &v {
+            Value::Ptr(to) => &mut self.data.get_mut(to).0,
+            _ => v,
+        }
+    }
+
+    #[cfg_attr(feature = "inline", inline(always))]
+    fn internal_op(&mut self, op: &str, loc: &FileLocation) -> Result<(), RuntimeError> {
+        let val = match op {
             nms::F_LTEQ => {
                 let a = self.stack_pop();
                 let b = self.stack_pop();
@@ -128,8 +140,8 @@ impl<'a> Runner<'a> {
                 let bb = self.reduct(&b);
 
                 match (aa, bb) {
-                    (Value::Int(i2), Value::Int(i1)) => self.stack.push(Value::Bool(i1 <= i2)),
-                    (Value::Float(f2), Value::Float(f1)) => self.stack.push(Value::Bool(f1 <= f2)),
+                    (Value::Int(i2), Value::Int(i1)) => Value::Bool(i1 <= i2),
+                    (Value::Float(f2), Value::Float(f1)) => Value::Bool(f1 <= f2),
                     _ => panic!(),
                 }
             }
@@ -140,8 +152,8 @@ impl<'a> Runner<'a> {
                 let bb = self.reduct(&b);
 
                 match (aa, bb) {
-                    (Value::Int(i2), Value::Int(i1)) => self.stack.push(Value::Bool(i1 < i2)),
-                    (Value::Float(f2), Value::Float(f1)) => self.stack.push(Value::Bool(f1 < f2)),
+                    (Value::Int(i2), Value::Int(i1)) => Value::Bool(i1 < i2),
+                    (Value::Float(f2), Value::Float(f1)) => Value::Bool(f1 < f2),
                     _ => panic!(),
                 }
             }
@@ -152,10 +164,10 @@ impl<'a> Runner<'a> {
                 let bb = self.reduct(&b);
 
                 match (aa, bb) {
-                    (Value::Int(i2), Value::Int(i1)) => self.stack.push(Value::Int(i1 - i2)),
-                    (Value::Float(f2), Value::Float(f1)) => self.stack.push(Value::Float(f1 - f2)),
+                    (Value::Int(i2), Value::Int(i1)) => Value::Int(i1 - i2),
+                    (Value::Float(f2), Value::Float(f1)) => Value::Float(f1 - f2),
                     _ => panic!(),
-                };
+                }
             }
             nms::F_ADD => {
                 let a = self.stack_pop();
@@ -164,11 +176,9 @@ impl<'a> Runner<'a> {
                 let bb = self.reduct(&b);
 
                 match (aa, bb) {
-                    (Value::Int(i2), Value::Int(i1)) => self.stack.push(Value::Int(i1 + i2)),
-                    (Value::Float(f2), Value::Float(f1)) => self.stack.push(Value::Float(f1 + f2)),
-                    (Value::Str(s2), Value::Str(s1)) => {
-                        self.stack.push(Value::Str(s1.clone() + &s2))
-                    }
+                    (Value::Int(i2), Value::Int(i1)) => Value::Int(i1 + i2),
+                    (Value::Float(f2), Value::Float(f1)) => Value::Float(f1 + f2),
+                    (Value::Str(s2), Value::Str(s1)) => Value::Str(s1.clone() + &s2),
                     _ => panic!(),
                 }
             }
@@ -179,12 +189,12 @@ impl<'a> Runner<'a> {
                 let bb = self.reduct(&b);
 
                 match (aa, bb) {
-                    (Value::Int(i2), Value::Int(i1)) => self.stack.push(Value::Bool(i1 == i2)),
-                    (Value::Float(f2), Value::Float(f1)) => self.stack.push(Value::Bool(f1 == f2)),
-                    (Value::Str(s2), Value::Str(s1)) => self.stack.push(Value::Bool(s1 == s2)),
-                    (Value::Bool(b2), Value::Bool(b1)) => self.stack.push(Value::Bool(b2 == b1)),
-                    (Value::Null, Value::Null) => self.stack.push(Value::Bool(true)),
-                    _ => self.stack.push(Value::Bool(false)),
+                    (Value::Int(i2), Value::Int(i1)) => Value::Bool(i1 == i2),
+                    (Value::Float(f2), Value::Float(f1)) => Value::Bool(f1 == f2),
+                    (Value::Str(s2), Value::Str(s1)) => Value::Bool(s1 == s2),
+                    (Value::Bool(b2), Value::Bool(b1)) => Value::Bool(b2 == b1),
+                    (Value::Null, Value::Null) => Value::Bool(true),
+                    _ => Value::Bool(false),
                 }
             }
             nms::F_MOD => {
@@ -194,11 +204,9 @@ impl<'a> Runner<'a> {
                 let bb = self.reduct(&b);
 
                 match (aa, bb) {
-                    (Value::Int(i2), Value::Int(i1)) => self.stack.push(Value::Int(i1 % i2)),
-                    (Value::Float(f2), Value::Float(f1)) => self.stack.push(Value::Float(f1 % f2)),
-                    (Value::Str(s2), Value::Str(s1)) => {
-                        self.stack.push(Value::Str(s1.replace("%", s2)))
-                    }
+                    (Value::Int(i2), Value::Int(i1)) => Value::Int(i1 % i2),
+                    (Value::Float(f2), Value::Float(f1)) => Value::Float(f1 % f2),
+                    (Value::Str(s2), Value::Str(s1)) => Value::Str(s1.replace("%", s2)),
                     _ => panic!(),
                 }
             }
@@ -206,108 +214,228 @@ impl<'a> Runner<'a> {
                 let a = self.stack_pop();
                 let aa = self.reduct(&a);
                 match aa {
-                    Value::Str(s) => self.stack.push(Value::Str(s.clone())),
-                    Value::Int(i) => self.stack.push(Value::Str(i.to_string())),
-                    Value::Float(f) => self.stack.push(Value::Str(f.to_string())),
-                    Value::Bool(b) => self.stack.push(Value::Str(b.to_string())),
-                    Value::Null => self.stack.push(Value::Str(String::from(nms::NULL))),
+                    Value::Str(s) => Value::Str(s.clone()),
+                    Value::Int(i) => Value::Str(i.to_string()),
+                    Value::Float(f) => Value::Str(f.to_string()),
+                    Value::Bool(b) => Value::Str(b.to_string()),
+                    Value::Null => Value::Str(String::from(nms::NULL)),
                     _ => panic!(),
                 }
             }
 
-            _ => todo!("Operation Not Yet Implimented: {op}"),
+            nms::F_BOOL => {
+                let a = self.stack_pop();
+                let aa = self.reduct(&a);
+                match aa {
+                    Value::Str(s) => Value::Bool(!s.is_empty()),
+                    Value::Int(i) => Value::Bool(*i != 0),
+                    Value::Float(f) => Value::Bool(*f != 0.0),
+                    Value::Bool(b) => Value::Bool(*b),
+                    Value::Null => Value::Bool(false),
+                    _ => panic!(),
+                }
+            }
+
+            nms::F_INT => {
+                let a = self.stack_pop();
+                let aa = self.reduct(&a);
+                match aa {
+                    Value::Str(s) => Value::Int(match s.parse() {
+                        Ok(i) => i,
+                        Err(_) => {
+                            return Err(RuntimeError(
+                                format!("\"{}\" can not be converted into an integer.", s),
+                                loc.clone(),
+                            ))
+                        }
+                    }),
+                    Value::Int(i) => Value::Int(*i),
+                    Value::Float(f) => Value::Int(f.round() as i32),
+                    Value::Bool(b) => Value::Int((*b).try_into().unwrap()),
+                    Value::Null => Value::Int(0),
+                    _ => panic!(),
+                }
+            }
+            nms::F_FLOAT => {
+                let a = self.stack_pop();
+                let aa = self.reduct(&a);
+                match aa {
+                    Value::Str(s) => Value::Float(match s.parse() {
+                        Ok(i) => i,
+                        Err(_) => {
+                            return Err(RuntimeError(
+                                format!("\"{}\" can not be converted into a float.", s),
+                                loc.clone(),
+                            ))
+                        }
+                    }),
+                    Value::Int(i) => Value::Float(*i as f32),
+                    Value::Float(f) => Value::Float(*f),
+                    Value::Bool(b) => Value::Float((*b).try_into().unwrap()),
+                    Value::Null => Value::Float(0.0),
+                    _ => panic!(),
+                }
+            }
+            nms::F_NEW => {
+                let a = self.stack_pop();
+                let aa = self.reduct(&a);
+                match aa {
+                    Value::Str(s) => Value::Str(s.clone()),
+                    Value::Int(i) => Value::Int(*i),
+                    Value::Float(f) => Value::Float(*f),
+                    Value::Bool(b) => Value::Bool(*b),
+                    Value::Null => Value::Null,
+                    _ => panic!(),
+                }
+            }
+            nms::F_MULT => {
+                todo!("F_MULT is not yet implimented");
+            }
+            nms::F_DIV => {
+                todo!("F_DIV is not yet implimented");
+            }
+            nms::F_EXP => {
+                todo!("F_EXP is not yet implimented");
+            }
+            nms::F_GT => {
+                todo!("F_GT is not yet implimented");
+            }
+            nms::F_GTEQ => {
+                todo!("F_GTEQ is not yet implimented");
+            }
+            nms::F_NOT => {
+                todo!("F_NOT is not yet implimented");
+            }
+            nms::F_AND => {
+                todo!("F_AND is not yet implimented");
+            }
+            nms::F_OR => {
+                todo!("F_OR is not yet implimented");
+            }
+            nms::F_LEN => {
+                let a = self.stack_pop();
+                let aa = self.reduct(&a);
+
+                match aa {
+                    Value::Str(s) => Value::Int(s.len().try_into().unwrap()),
+                    Value::Array(a) => Value::Int(a.len().try_into().unwrap()),
+                    _ => panic!(),
+                }
+            }
+            nms::F_INDEX => {
+                let a = self.stack_pop();
+                let b = self.stack_pop();
+                let aa = self.reduct(&a);
+                let bb = self.reduct(&b);
+
+                match bb {
+                    Value::Array(arr) => {
+                        let idx = *aa.int(self);
+                        let arr_len = arr.len() as i32;
+
+                        if idx < 0 || idx + 1> arr_len {
+                            if arr_len > 0 {
+                                return Err(RuntimeError(
+                                    format!(
+                                        "{} is out of the range of the array. Array range is [0, {}].",
+                                        idx,
+                                        arr_len - 1
+                                    ),
+                                    loc.clone(),
+                                ));
+                            } else {
+                                return Err(RuntimeError(
+                                    format!(
+                                        "{} is out of the range of the array. Array is empty.",
+                                        idx,
+                                    ),
+                                    loc.clone(),
+                                ));
+                            }
+                        }
+
+                        arr[idx as usize].clone()
+                    }
+                    _ => panic!(),
+                }
+            }
+            nms::F_APPEND => {
+                let key = self.gc.next();
+                let a = self.stack_pop();
+                let mut b = self.stack_pop();
+                let aa = self.reduct(&a).clone();
+                self.data.insert(key, Cell(aa.clone(), 1));
+
+                let bb = self.mut_reduct(&mut b);
+
+                match bb {
+                    Value::Array(arr) => arr.push(Value::Ptr(key)),
+                    _ => panic!(),
+                };
+
+                Value::Null
+            }
+            nms::F_REMOVE => {
+                todo!("F_REMOVE is not yet implimented");
+            }
+            nms::F_READLN => {
+                let mut s = String::new();
+                if let Err(err) = stdin().read_line(&mut s) {
+                    return Err(RuntimeError(
+                        format!("Could not read: {}", err),
+                        loc.clone(),
+                    ));
+                }
+                Value::Str(s)
+            }
+
+            _ => panic!(),
+        };
+
+        self.stack.push(val);
+        return Ok(());
+    }
+
+    #[cfg_attr(feature = "inline", inline(always))]
+    fn release(&mut self, nms: &Vec<String>) {
+        let reserve = match self.stack.last() {
+            Some(Value::Ptr(to)) => *to,
+            _ => 0,
+        };
+
+        for nm in nms {
+            let key = self.scopes.get_mut(nm).unwrap().pop().unwrap();
+            let data = self.data.get_mut(&key);
+            data.1 -= 1;
+
+            if data.1 == 0 {
+                if key == reserve {
+                    *self.stack.last_mut().unwrap() = self.data.remove(&key).0;
+                } else {
+                    self.data.remove(&key);
+                }
+            }
         }
     }
 
-    #[inline(always)]
-    fn run_command(&mut self) -> bool {
+    #[cfg_attr(feature = "inline", inline(always))]
+    fn run_command(&mut self) -> Result<bool, RuntimeError> {
         let cmd = &self.prog.tape[self.current_postion];
 
         match cmd {
             CMD::SplitScope => {
-                self.scopes.push(HashMap::default());
                 self.current_postion += 1;
             }
-            CMD::Release => {
-                let preserve = match self.stack.last() {
-                    Some(Value::Ptr(to)) => *to,
-                    _ => 0,
-                };
-
-                for val in self.scopes.pop().unwrap().values() {
-                    let cell = self.data.get_mut(val).unwrap();
-                    cell.1 -= 1;
-
-                    if cell.1 == 0 {
-                        match *val == preserve {
-                            true => {
-                                *self.stack.last_mut().unwrap() = self.data.remove(val).unwrap().0;
-                            }
-                            false => {
-                                self.data.remove(val);
-                            }
-                        }
-                    }
-                }
-
+            CMD::Release(nms) => {
+                self.release(nms);
                 self.current_postion += 1;
             }
-            CMD::RelaseN(n) => {
-                let preserve = match self.stack.last() {
-                    Some(Value::Ptr(to)) => *to,
-                    _ => 0,
-                };
-
-                for _ in 0..*n {
-                    for val in self.scopes.pop().unwrap().values() {
-                        let cell = self.data.get_mut(val).unwrap();
-                        cell.1 -= 1;
-
-                        if cell.1 == 0 {
-                            match *val == preserve {
-                                true => {
-                                    *self.stack.last_mut().unwrap() =
-                                        self.data.remove(val).unwrap().0;
-                                }
-                                false => {
-                                    self.data.remove(val);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                self.current_postion += 1;
-            }
-            CMD::Defer(n) => {
-                let preserve = match self.stack.last() {
-                    Some(Value::Ptr(to)) => *to,
-                    _ => 0,
-                };
-
+            CMD::Defer => {
                 let refer = match self.refer_stack.pop() {
                     Some(refer) => refer,
-                    None => return true,
+                    None => return Ok(true),
                 };
 
-                for _ in 0..*n {
-                    for val in self.scopes.pop().unwrap().values() {
-                        let cell = self.data.get_mut(val).unwrap();
-                        cell.1 -= 1;
-
-                        if cell.1 == 0 {
-                            match *val == preserve {
-                                true => {
-                                    *self.stack.last_mut().unwrap() =
-                                        self.data.remove(val).unwrap().0;
-                                }
-                                false => {
-                                    self.data.remove(val);
-                                }
-                            }
-                        }
-                    }
-                }
                 self.current_postion = refer + 1;
             }
             CMD::Jump(idx) => self.current_postion = *idx,
@@ -344,7 +472,7 @@ impl<'a> Runner<'a> {
                 let v = self.stack_pop();
                 let idx = match v {
                     Value::Ptr(to) => {
-                        self.data.get_mut(&to).unwrap().1 += 1;
+                        self.data.get_mut(&to).1 += 1;
                         to
                     }
                     _ => {
@@ -354,8 +482,13 @@ impl<'a> Runner<'a> {
                     }
                 };
 
-                let lst = self.scopes.last_mut().unwrap();
-                lst.insert(n, idx);
+                match self.scopes.get_mut(n) {
+                    Some(lst) => lst.push(idx),
+                    None => {
+                        self.scopes.insert(n, vec![idx]);
+                    }
+                }
+
                 self.current_postion += 1;
             }
             CMD::XIf => match self.stack_pop().bool(self) {
@@ -366,12 +499,12 @@ impl<'a> Runner<'a> {
                 self.refer_stack.push(self.current_postion);
                 self.current_postion = *idx;
             }
-            CMD::InternalOp(op) => {
-                self.internal_op(op);
+            CMD::InternalOp(op, loc) => {
+                self.internal_op(op, loc)?;
                 self.current_postion += 1;
             }
             CMD::PushLit(literal) => {
-                self.stack.push(Value::from_lit(literal));
+                self.stack.push(literal.clone());
                 self.current_postion += 1;
             }
             CMD::PushObj(fields) => {
@@ -394,7 +527,7 @@ impl<'a> Runner<'a> {
                 match self.stack_pop() {
                     Value::Ptr(to) => {
                         let pop = self.stack_pop();
-                        self.data.get_mut(&to).unwrap().0 = match pop {
+                        self.data.get_mut(&to).0 = match pop {
                             Value::Ptr(to) => self.data[&to].0.clone(),
                             _ => pop,
                         }
@@ -403,13 +536,22 @@ impl<'a> Runner<'a> {
                 }
                 self.current_postion += 1;
             }
+            CMD::TRelease => self.current_postion += 1,
+            CMD::PushVec => {
+                self.stack.push(Value::Array(Vec::new()));
+                self.current_postion += 1;
+            }
         }
 
-        return false;
+        return Ok(false);
     }
 }
 
-pub fn interpret(program: &FlatProgram, args: &Vec<String>, debug: bool) {
+pub fn interpret(
+    program: &FlatProgram,
+    args: &Vec<String>,
+    debug: bool,
+) -> Result<(), RuntimeError> {
     let mut runner = Runner::new(program, args);
     match debug {
         true => debugger::Debugger::new(runner).debug(),
