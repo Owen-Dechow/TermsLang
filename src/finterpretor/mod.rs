@@ -69,25 +69,20 @@ struct Runner<'a> {
     stack: Vec<Value>,
     refer_stack: Vec<usize>,
     prog: &'a FlatProgram,
-    scopes: FxHashMap<&'a String, Vec<usize>>,
+    scopes: FxHashMap<&'a String, Vec<Value>>,
     data: Data,
     gc: GlobalCounter,
 }
 impl<'a> Runner<'a> {
     fn new(prog: &'a FlatProgram, args: &Vec<String>) -> Self {
-        let mut data = Data::default();
-        let mut ptr_args = Vec::new();
-        let mut gc = GlobalCounter::new();
+        let data = Data::default();
+        let gc = GlobalCounter::new();
 
-        for arg in args {
-            let key = gc.next();
-            data.insert(key, Cell(Value::Str(arg.clone()), 1));
-            ptr_args.push(Value::Ptr(key));
-        }
+        let args = args.into_iter().map(|x| Value::Str(x.clone())).collect();
 
         Self {
             current_postion: prog.start_point,
-            stack: vec![Value::Array(ptr_args)],
+            stack: vec![Value::Array(args)],
             refer_stack: Vec::new(),
             scopes: FxHashMap::default(),
             prog,
@@ -110,7 +105,7 @@ impl<'a> Runner<'a> {
     }
 
     #[cfg_attr(feature = "inline", inline(always))]
-    fn get_var(&self, var: &String) -> &usize {
+    fn get_var(&self, var: &String) -> &Value {
         self.scopes[var].last().unwrap()
     }
 
@@ -333,7 +328,7 @@ impl<'a> Runner<'a> {
                         let idx = *aa.int(self);
                         let arr_len = arr.len() as i32;
 
-                        if idx < 0 || idx + 1> arr_len {
+                        if idx < 0 || idx + 1 > arr_len {
                             if arr_len > 0 {
                                 return Err(RuntimeError(
                                     format!(
@@ -405,14 +400,16 @@ impl<'a> Runner<'a> {
 
         for nm in nms {
             let key = self.scopes.get_mut(nm).unwrap().pop().unwrap();
-            let data = self.data.get_mut(&key);
-            data.1 -= 1;
+            if let Value::Ptr(key) = key {
+                let data = self.data.get_mut(&key);
+                data.1 -= 1;
 
-            if data.1 == 0 {
-                if key == reserve {
-                    *self.stack.last_mut().unwrap() = self.data.remove(&key).0;
-                } else {
-                    self.data.remove(&key);
+                if data.1 == 0 {
+                    if key == reserve {
+                        *self.stack.last_mut().unwrap() = self.data.remove(&key).0;
+                    } else {
+                        self.data.remove(&key);
+                    }
                 }
             }
         }
@@ -453,8 +450,8 @@ impl<'a> Runner<'a> {
                     self.current_postion += 1;
                 }
                 VarAdress::Var(var) => {
-                    let v = *self.get_var(var);
-                    self.stack.push(Value::Ptr(v));
+                    let v = self.get_var(var);
+                    self.stack.push(v.clone());
                     self.current_postion += 1;
                 }
             },
@@ -470,22 +467,14 @@ impl<'a> Runner<'a> {
             }
             CMD::Let(n) => {
                 let v = self.stack_pop();
-                let idx = match v {
-                    Value::Ptr(to) => {
-                        self.data.get_mut(&to).1 += 1;
-                        to
-                    }
-                    _ => {
-                        let idx = self.gc.next();
-                        self.data.insert(idx, Cell(v, 1));
-                        idx
-                    }
-                };
+                if let Value::Ptr(to) = v {
+                    self.data.get_mut(&to).1 += 1;
+                }
 
                 match self.scopes.get_mut(n) {
-                    Some(lst) => lst.push(idx),
+                    Some(lst) => lst.push(v),
                     None => {
-                        self.scopes.insert(n, vec![idx]);
+                        self.scopes.insert(n, vec![v]);
                     }
                 }
 

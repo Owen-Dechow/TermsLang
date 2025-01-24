@@ -152,7 +152,7 @@ impl Debugger<'_> {
         for (key, ptrs) in &self.runner.scopes {
             string += &format!("{}:\n", key);
             for ptr in ptrs.into_iter().rev().enumerate() {
-                string += &format!(" {}", ptr.1);
+                string += &format!(" {:?}", ptr.1);
                 if ptr.0 < ptrs.len() - 1 {
                     string += ","
                 } else {
