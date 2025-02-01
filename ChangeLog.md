@@ -1,6 +1,12 @@
 # TermsLang Version Log
 
-## Version 0.7.3
+## Version 0.8.0
+
+> February 1, 2025
+
+CLI tool help
+
+## Version 0.8.0
 
 > February 1, 2025
 

@@ -2,6 +2,11 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser)]
+#[command(
+    version,
+    about = "The Terms Programming Language: https://github.com/Owen-Dechow/TermsLang",
+    author = "Owen Dechow"
+)]
 pub struct Args {
     #[command(subcommand)]
     pub cmd: Command,
@@ -9,30 +14,30 @@ pub struct Args {
 
 #[derive(Subcommand)]
 pub enum Command {
-    // Run a program
+    #[command(about = "Run a program.")]
     Run {
-        // File containing entry function.
+        #[arg(help = "File containing entry function.")]
         file: PathBuf,
 
-        // Command line arguments
+        #[arg(help = "Command line arguments.")]
         args: Vec<String>,
     },
 
-    // Run a program
+    #[command(about = "Run a program.")]
     Debug {
-        // File containing entry function.
+        #[arg(help = "File containing entry function.")]
         file: PathBuf,
 
-        // Command line arguments
+        #[arg(help = "Command line arguments")]
         args: Vec<String>,
     },
 
-    // Format a file
+    #[command(about = "Format a file.")]
     Format {
-        // File with valid syntax
+        #[arg(help = "File with valid syntax")]
         file: PathBuf,
     },
 
-    // Update TermsLang
+    #[command(about = "Update TermsLang.")]
     Update,
 }
