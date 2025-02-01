@@ -2,6 +2,12 @@
 
 ## Version 0.7.3
 
+> February 1, 2025
+
+Added debugger & finterpretor
+
+## Version 0.7.3
+
 > November 24, 2024
 
 Updated manager.
