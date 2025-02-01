@@ -4,7 +4,9 @@ use crate::{
     active_parser::{
         names as nms, ACall, AFunc, AFuncBlock, ALiteral, AObject, AObjectType, AOperandExpression,
         AOperandExpressionValue, AProgram, ATerm, ATermBlock, AType,
-    }, errors::FileLocation, finterpretor::Value
+    },
+    errors::FileLocation,
+    finterpretor::Value,
 };
 
 struct ProgramBuilder {
@@ -103,7 +105,7 @@ pub enum CMD {
     Print,
     PrintLn,
     Let(String),
-    Update,
+    Update(Vec<String>),
     XIf,
     Refer(usize),
     InternalOp(String, FileLocation),
@@ -157,6 +159,19 @@ fn add_block(
     }
 
     pb.release_scope(defer_count, release_count, scopes, 1, true);
+}
+
+fn peek_reduct(object: &AObject, reduct: &mut Vec<String>) {
+    match &object.kind {
+        AObjectType::Identity(id) => {
+            reduct.push(id.clone());
+
+            if let Some(obj) = &object.sub {
+                peek_reduct(&obj, reduct)
+            }
+        }
+        _ => panic!(),
+    }
 }
 
 fn add_object(pb: &mut ProgramBuilder, object: &AObject, parent: Option<&AObject>) {
@@ -299,8 +314,9 @@ fn add_term(
         }
         ATerm::UpdateVar { value, var } => {
             add_operand_block(pb, value);
-            add_object(pb, var, None);
-            pb.push(CMD::Update);
+            let mut vec = Vec::new();
+            peek_reduct(var, &mut vec);
+            pb.push(CMD::Update(vec));
         }
         ATerm::If {
             conditional,
@@ -345,6 +361,8 @@ fn add_term(
             pb.split_scope(defer_count, release_count, scopes, pb.debug);
             pb.push(CMD::PushLit(Value::Int(-1)));
             pb.push(CMD::Let(counter.clone()));
+            scopes.last_mut().unwrap().push(counter.clone());
+
             let loop_start = pb.len();
 
             release_count.push(0);
@@ -352,8 +370,7 @@ fn add_term(
             pb.push(CMD::PushLit(Value::Int(1)));
             pb.push(CMD::Push(VarAdress::Var(counter.clone())));
             pb.push(CMD::InternalOp(nms::F_ADD.to_string(), FileLocation::None));
-            pb.push(CMD::Push(VarAdress::Var(counter.clone())));
-            pb.push(CMD::Update);
+            pb.push(CMD::Update(vec![counter.clone()]));
             add_operand_block(pb, conditional);
             pb.push(CMD::XIf);
             pb.non_indexed_loops.push(vec![pb.len()]);
@@ -374,7 +391,7 @@ fn add_term(
                 }
             }
 
-            pb.release_scope(defer_count, release_count, scopes, 1, false);
+            pb.release_scope(defer_count, release_count, scopes, 1, true);
         }
         ATerm::Break => {
             pb.release_scope(

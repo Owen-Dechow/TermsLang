@@ -3,7 +3,7 @@ The terms programming language
 
 > Simple, Concise, ~~Fast~~
 
-## Latest Version: `v0.7.3`
+## Latest Version: `v0.8.0`
 
 ## Installation
 ```
@@ -12,24 +12,18 @@ cargo install termslang
 
 ## Run File
 ```
-termslang example.tms
+termslang run example.tms
 ```
 
 ## Format File
 ```
-termslang example.tms -f
+termslang format example.tms
 ```
 
+## Debug File
 ```
-termslang example.tms --format
+termslang debug example.tms
 ```
 
 ## Supports
 VSCode Support: https://github.com/Owen-Dechow/TermsVsCodeSupport
-
-## Progress
-- [x] Main Lexer
-- [x] Main Parser
-- [x] Main Active Parser
-- [x] Main Interpreter
-- [ ] Version 1.0

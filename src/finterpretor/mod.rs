@@ -20,7 +20,7 @@ pub enum Value {
     Ptr(usize),
 }
 impl Value {
-    #[cfg_attr(feature = "inline", inline(always))]
+    #[cfg_attr(not(feature = "no-inline"), inline(always))]
     fn string<'a>(&'a self, runner: &'a Runner) -> &'a String {
         match self {
             Value::Str(string) => string,
@@ -29,7 +29,7 @@ impl Value {
         }
     }
 
-    #[cfg_attr(feature = "inline", inline(always))]
+    #[cfg_attr(not(feature = "no-inline"), inline(always))]
     fn bool<'a>(&'a self, runner: &'a Runner) -> &'a bool {
         match self {
             Value::Bool(b) => b,
@@ -38,7 +38,7 @@ impl Value {
         }
     }
 
-    #[cfg_attr(feature = "inline", inline(always))]
+    #[cfg_attr(not(feature = "no-inline"), inline(always))]
     fn int<'a>(&'a self, runner: &'a Runner) -> &'a i32 {
         match self {
             Value::Int(i) => i,
@@ -54,7 +54,7 @@ impl GlobalCounter {
         Self(0)
     }
 
-    #[cfg_attr(feature = "inline", inline(always))]
+    #[cfg_attr(not(feature = "no-inline"), inline(always))]
     fn next(&mut self) -> usize {
         self.0 += 1;
         return self.0;
@@ -91,7 +91,7 @@ impl<'a> Runner<'a> {
         }
     }
 
-    #[cfg_attr(feature = "inline", inline(always))]
+    #[cfg_attr(not(feature = "no-inline"), inline(always))]
     fn stack_pop(&mut self) -> Value {
         match self.stack.pop() {
             Some(s) => s,
@@ -104,12 +104,62 @@ impl<'a> Runner<'a> {
         return Ok(());
     }
 
-    #[cfg_attr(feature = "inline", inline(always))]
+    #[cfg_attr(not(feature = "no-inline"), inline(always))]
     fn get_var(&self, var: &String) -> &Value {
         self.scopes[var].last().unwrap()
     }
 
-    #[cfg_attr(feature = "inline", inline(always))]
+    #[cfg_attr(not(feature = "no-inline"), inline(always))]
+    fn set_var(&mut self, var: &[String], new: Value) {
+        let scope = self.scopes.get_mut(&var[0]).unwrap();
+
+        let to = match scope.last_mut().unwrap() {
+            Value::Custom(hash_map) => {
+                hash_map.insert(var[1].clone(), new);
+                return;
+            }
+            Value::Ptr(to) => match var.len() {
+                1 => {
+                    scope.pop();
+                    scope.push(new);
+                    return;
+                }
+                _ => *to,
+            },
+            _ => {
+                scope.pop();
+                scope.push(new);
+                return;
+            }
+        };
+
+        self.set_var_mut_on_obj(to, &var[1..], new);
+    }
+
+    fn set_var_mut_on_obj(&mut self, obj: usize, var: &[String], new: Value) {
+        let obj = &mut self.data.get_mut(&obj).0;
+
+        let to = match obj {
+            Value::Custom(ref mut hash_map) => match hash_map.get_mut(&var[0]).unwrap() {
+                Value::Ptr(to) => match var.len() {
+                    1 => {
+                        hash_map.insert(var[0].clone(), new);
+                        return;
+                    }
+                    _ => *to,
+                },
+                _ => {
+                    hash_map.insert(var[0].clone(), new);
+                    return;
+                }
+            },
+            _ => panic!(),
+        };
+
+        self.set_var_mut_on_obj(to, &var[1..], new);
+    }
+
+    #[cfg_attr(not(feature = "no-inline"), inline(always))]
     fn reduct(&self, v: &'a Value) -> &Value {
         match &v {
             Value::Ptr(to) => &self.data[to].0,
@@ -117,7 +167,7 @@ impl<'a> Runner<'a> {
         }
     }
 
-    #[cfg_attr(feature = "inline", inline(always))]
+    #[cfg_attr(not(feature = "no-inline"), inline(always))]
     fn mut_reduct<'b>(&'b mut self, v: &'b mut Value) -> &'b mut Value {
         match &v {
             Value::Ptr(to) => &mut self.data.get_mut(to).0,
@@ -125,7 +175,7 @@ impl<'a> Runner<'a> {
         }
     }
 
-    #[cfg_attr(feature = "inline", inline(always))]
+    #[cfg_attr(not(feature = "no-inline"), inline(always))]
     fn internal_op(&mut self, op: &str, loc: &FileLocation) -> Result<(), RuntimeError> {
         let val = match op {
             nms::F_LTEQ => {
@@ -217,7 +267,6 @@ impl<'a> Runner<'a> {
                     _ => panic!(),
                 }
             }
-
             nms::F_BOOL => {
                 let a = self.stack_pop();
                 let aa = self.reduct(&a);
@@ -230,7 +279,6 @@ impl<'a> Runner<'a> {
                     _ => panic!(),
                 }
             }
-
             nms::F_INT => {
                 let a = self.stack_pop();
                 let aa = self.reduct(&a);
@@ -284,28 +332,98 @@ impl<'a> Runner<'a> {
                 }
             }
             nms::F_MULT => {
-                todo!("F_MULT is not yet implimented");
+                let a = self.stack_pop();
+                let b = self.stack_pop();
+                let aa = self.reduct(&a);
+                let bb = self.reduct(&b);
+
+                match (aa, bb) {
+                    (Value::Int(i2), Value::Int(i1)) => Value::Int(i1 * i2),
+                    (Value::Float(f2), Value::Float(f1)) => Value::Float(f1 * f2),
+                    _ => panic!(),
+                }
             }
             nms::F_DIV => {
-                todo!("F_DIV is not yet implimented");
+                let a = self.stack_pop();
+                let b = self.stack_pop();
+                let aa = self.reduct(&a);
+                let bb = self.reduct(&b);
+
+                match (aa, bb) {
+                    (Value::Int(i2), Value::Int(i1)) => Value::Int(i1 / i2),
+                    (Value::Float(f2), Value::Float(f1)) => Value::Float(f1 / f2),
+                    _ => panic!(),
+                }
             }
             nms::F_EXP => {
-                todo!("F_EXP is not yet implimented");
+                let a = self.stack_pop();
+                let b = self.stack_pop();
+                let aa = self.reduct(&a);
+                let bb = self.reduct(&b);
+
+                match (aa, bb) {
+                    (Value::Int(i2), Value::Int(i1)) => Value::Int(i1.pow(match (*i2).try_into() {
+                        Ok(i2) => i2,
+                        Err(_) =>  return Err(RuntimeError(format!("Right side of int exponent must be positive integer. Found {i2}. Convert to float to avoid this."), loc.clone())),
+                    })),
+                    (Value::Float(f2), Value::Float(f1)) => Value::Float(f1.powf(*f2)),
+                    _ => panic!(),
+                }
             }
             nms::F_GT => {
-                todo!("F_GT is not yet implimented");
+                let a = self.stack_pop();
+                let b = self.stack_pop();
+                let aa = self.reduct(&a);
+                let bb = self.reduct(&b);
+
+                match (aa, bb) {
+                    (Value::Int(i2), Value::Int(i1)) => Value::Bool(i1 > i2),
+                    (Value::Float(f2), Value::Float(f1)) => Value::Bool(f1 > f2),
+                    _ => panic!(),
+                }
             }
             nms::F_GTEQ => {
-                todo!("F_GTEQ is not yet implimented");
+                let a = self.stack_pop();
+                let b = self.stack_pop();
+                let aa = self.reduct(&a);
+                let bb = self.reduct(&b);
+
+                match (aa, bb) {
+                    (Value::Int(i2), Value::Int(i1)) => Value::Bool(i1 >= i2),
+                    (Value::Float(f2), Value::Float(f1)) => Value::Bool(f1 >= f2),
+                    _ => panic!(),
+                }
             }
             nms::F_NOT => {
-                todo!("F_NOT is not yet implimented");
+                let a = self.stack_pop();
+                let aa = self.reduct(&a);
+
+                match aa {
+                    Value::Bool(b) => Value::Bool(!b),
+                    _ => panic!(),
+                }
             }
             nms::F_AND => {
-                todo!("F_AND is not yet implimented");
+                let a = self.stack_pop();
+                let b = self.stack_pop();
+                let aa = self.reduct(&a);
+                let bb = self.reduct(&b);
+
+                match (aa, bb) {
+                    (Value::Bool(b1), Value::Bool(b2)) => Value::Bool(*b1 && *b2),
+                    _ => panic!(),
+                }
             }
             nms::F_OR => {
-                todo!("F_OR is not yet implimented");
+                let a = self.stack_pop();
+                let b = self.stack_pop();
+                let aa = self.reduct(&a);
+                let bb = self.reduct(&b);
+
+                match (aa, bb) {
+                    (Value::Bool(b1), Value::Bool(b2)) => Value::Bool(*b1 || *b2),
+                    _ => panic!(),
+                }
             }
             nms::F_LEN => {
                 let a = self.stack_pop();
@@ -371,7 +489,43 @@ impl<'a> Runner<'a> {
                 Value::Null
             }
             nms::F_REMOVE => {
-                todo!("F_REMOVE is not yet implimented");
+                let a = self.stack_pop();
+                let idx = *self.reduct(&a).clone().int(self);
+
+                let mut b = self.stack_pop();
+                let bb = self.mut_reduct(&mut b);
+
+                match bb {
+                    Value::Array(arr) => {
+                        let arr_len = arr.len() as i32;
+
+                        if idx < 0 || idx + 1 > arr_len {
+                            if arr_len > 0 {
+                                return Err(RuntimeError(
+                                    format!(
+                                        "{} is out of the range of the array. Array range is [0, {}].",
+                                        idx,
+                                        arr_len - 1
+                                    ),
+                                    loc.clone(),
+                                ));
+                            } else {
+                                return Err(RuntimeError(
+                                    format!(
+                                        "{} is out of the range of the array. Array is empty.",
+                                        idx,
+                                    ),
+                                    loc.clone(),
+                                ));
+                            }
+                        }
+
+                        arr.remove(idx.try_into().unwrap());
+
+                        Value::Null
+                    }
+                    _ => panic!(),
+                }
             }
             nms::F_READLN => {
                 let mut s = String::new();
@@ -383,7 +537,6 @@ impl<'a> Runner<'a> {
                 }
                 Value::Str(s)
             }
-
             _ => panic!(),
         };
 
@@ -391,7 +544,58 @@ impl<'a> Runner<'a> {
         return Ok(());
     }
 
-    #[cfg_attr(feature = "inline", inline(always))]
+    fn release_complex(&mut self, value: Value, reserve: &usize) {
+        match value {
+            Value::Custom(hash_map) => {
+                for val in hash_map.values() {
+                    if let Value::Ptr(key) = val {
+                        let data = self.data.get_mut(&key);
+                        data.1 -= 1;
+
+                        if data.1 == 0 {
+                            let val = self.data.remove(&key).0;
+
+                            if key == reserve {
+                                *self.stack.last_mut().unwrap() = val;
+                            } else {
+                                if let Value::Array(..) | Value::Custom(..) = val {
+                                    self.release_complex(val, &reserve);
+                                }
+                            }
+                        }
+                    } else if let Value::Custom(..) | Value::Array(..) = val {
+                        self.release_complex(val.clone(), reserve);
+                    }
+                }
+            }
+            Value::Array(values) => {
+                for val in &values {
+                    if let Value::Ptr(key) = val {
+                        let data = self.data.get_mut(&key);
+                        data.1 -= 1;
+
+                        if data.1 == 0 {
+                            let val = self.data.remove(&key).0;
+
+                            if key == reserve {
+                                *self.stack.last_mut().unwrap() = val;
+                            } else {
+                                if let Value::Array(..) | Value::Custom(..) = val {
+                                    self.release_complex(val, &reserve);
+                                }
+                            }
+                        }
+                    } else if let Value::Custom(..) | Value::Array(..) = val {
+                        self.release_complex(val.clone(), reserve);
+                    }
+                }
+            }
+            Value::Ptr(_) => todo!(),
+            _ => panic!(),
+        }
+    }
+
+    #[cfg_attr(not(feature = "no-inline"), inline(always))]
     fn release(&mut self, nms: &Vec<String>) {
         let reserve = match self.stack.last() {
             Some(Value::Ptr(to)) => *to,
@@ -405,17 +609,23 @@ impl<'a> Runner<'a> {
                 data.1 -= 1;
 
                 if data.1 == 0 {
+                    let val = self.data.remove(&key).0;
+
                     if key == reserve {
-                        *self.stack.last_mut().unwrap() = self.data.remove(&key).0;
+                        *self.stack.last_mut().unwrap() = val;
                     } else {
-                        self.data.remove(&key);
+                        if let Value::Array(..) | Value::Custom(..) = val {
+                            self.release_complex(val, &reserve);
+                        }
                     }
                 }
+            } else if let Value::Custom(..) | Value::Array(..) = key {
+                self.release_complex(key, &reserve);
             }
         }
     }
 
-    #[cfg_attr(feature = "inline", inline(always))]
+    #[cfg_attr(not(feature = "no-inline"), inline(always))]
     fn run_command(&mut self) -> Result<bool, RuntimeError> {
         let cmd = &self.prog.tape[self.current_postion];
 
@@ -436,14 +646,14 @@ impl<'a> Runner<'a> {
                 self.current_postion = refer + 1;
             }
             CMD::Jump(idx) => self.current_postion = *idx,
-            CMD::Push(var_adress) => match var_adress {
+            CMD::Push(var_address) => match var_address {
                 VarAdress::Index(val) => {
                     match self.stack_pop() {
                         Value::Ptr(to) => match &self.data[&to].0 {
                             Value::Custom(hash_map) => self.stack.push(hash_map[val].clone()),
-                            Value::Array(vec) => todo!(),
                             _ => panic!(),
                         },
+                        Value::Custom(map) => self.stack.push(map[val].clone()),
                         _ => panic!(),
                     };
 
@@ -499,30 +709,26 @@ impl<'a> Runner<'a> {
             CMD::PushObj(fields) => {
                 let mut fmap = FxHashMap::default();
                 for field in fields {
-                    let null = Value::Null;
-                    let k = self.gc.next();
-                    self.data.insert(k, Cell(null, 1));
-                    fmap.insert(field.clone(), Value::Ptr(k));
+                    fmap.insert(field.clone(), Value::Null);
                 }
 
-                self.stack.push(Value::Custom(fmap));
+                let key = self.gc.next();
+                self.data.insert(key, Cell(Value::Custom(fmap), 0));
+                self.stack.push(Value::Ptr(key));
                 self.current_postion += 1;
             }
             CMD::Burn => {
                 self.stack_pop();
                 self.current_postion += 1;
             }
-            CMD::Update => {
-                match self.stack_pop() {
-                    Value::Ptr(to) => {
-                        let pop = self.stack_pop();
-                        self.data.get_mut(&to).0 = match pop {
-                            Value::Ptr(to) => self.data[&to].0.clone(),
-                            _ => pop,
-                        }
-                    }
-                    _ => panic!(),
+            CMD::Update(reduct) => {
+                let new = self.stack_pop();
+
+                if let Value::Ptr(ref to) = new {
+                    self.data.get_mut(to).1 += 1;
                 }
+
+                self.set_var(reduct, new);
                 self.current_postion += 1;
             }
             CMD::TRelease => self.current_postion += 1,

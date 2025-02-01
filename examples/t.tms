@@ -1,8 +1,15 @@
 ""
 
+struct B {}
+
+struct A {
+    let B b ~
+
+    func null @new: B b {
+        updt @this.b = b ~
+    }
+}
 
 func null @main: str[] args {
-    let int[] a = $() int[] ~
-    cll a.@append.(1) ~
-    println a.[1].@str.() ~
+    let A a = $($() B) A ~
 }

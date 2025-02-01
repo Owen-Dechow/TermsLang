@@ -1,6 +1,6 @@
 use crate::{errors::RuntimeError, flat_ir::CMD};
 use colored::Colorize;
-use std::{io::stdin, process::Command};
+use std::io::{stdin, Write};
 
 use super::Runner;
 
@@ -39,18 +39,33 @@ impl Debugger<'_> {
         };
     }
 
-    fn print_state(&self) {
-        clear_terminal();
-        let term_size = term_size::dimensions().unwrap();
+    fn print_state(&mut self) {
+        self.clear_terminal();
+        let term_size = termion::terminal_size().unwrap();
 
-        let program_string =
-            box_string(self.get_program_string(term_size.1 - 6), 50, "Program Tape");
-        let stack_string = box_string(self.get_stack_string(), 30, "Stack");
-        let refer_string = box_string(self.get_refer_string(), 30, "Refer Stack");
-        let data_string = box_string(self.get_data_string(), 30, "Heap Data");
-        let scopes_string = box_string(self.get_scopes_string(), 30, "Scope Pointers");
-        let std_out = box_string(self.get_std_out_string(term_size.1 - 12), 50, "STD Out");
-        let stats_string = box_string(self.get_stats_string(), 50, "Stats");
+        let min_width = 75;
+        if term_size.0 < min_width {
+            println!(
+                "Terminal width is {} must be at least {} to run debugger.",
+                term_size.0, min_width
+            )
+        }
+
+        let w = (term_size.0 - 1) as f32;
+        let r_50 = ((50.0 / 130.0) * w) as usize - 2;
+        let r_30 = ((30.0 / 130.0) * w) as usize - 3;
+
+        let program_string = box_string(
+            self.get_program_string(term_size.1 - 6),
+            r_50,
+            "Program Tape",
+        );
+        let stack_string = box_string(self.get_stack_string(), r_30, "Stack");
+        let refer_string = box_string(self.get_refer_string(), r_30, "Refer Stack");
+        let data_string = box_string(self.get_data_string(), r_30, "Heap Data");
+        let scopes_string = box_string(self.get_scopes_string(), r_30, "Scope Pointers");
+        let std_out = box_string(self.get_std_out_string(term_size.1 - 10), r_50, "STD Out");
+        let stats_string = box_string(self.get_stats_string(), r_50, "Stats");
 
         let col1 = program_string;
         let col2 = join_rows(stats_string, std_out);
@@ -58,13 +73,17 @@ impl Debugger<'_> {
             stack_string,
             join_rows(data_string, join_rows(refer_string, scopes_string)),
         );
-        println!("{}", join_cols(col1, join_cols(col2, col3)));
 
-        println!("[x] to exit [enter] to continue: ");
+        let mut string = format!("{}", join_cols(col1, join_cols(col2, col3)));
+        string += "[x] to exit, [enter] to continue: ";
+
+        println!("{}", string);
     }
 
-    fn get_std_out_string(&self, max_height: usize) -> String {
+    fn get_std_out_string(&self, max_height: u16) -> String {
         let lines: Vec<&str> = self.debug_out.lines().into_iter().collect();
+        let max_height = max_height as usize;
+
         if lines.len() >= max_height {
             lines[(lines.len() - max_height)..].join("\n")
         } else {
@@ -72,13 +91,13 @@ impl Debugger<'_> {
         }
     }
 
-    fn get_program_string(&self, max_height: usize) -> String {
+    fn get_program_string(&self, max_height: u16) -> String {
         let mut string = String::new();
 
         let mut top = 0;
         let mut bottom = self.runner.prog.tape.len();
 
-        if bottom > max_height {
+        if bottom > max_height as usize {
             let mut ntop = (self.runner.current_postion as i64) - (max_height as i64) / 2;
             if ntop < 0 {
                 ntop = 0
@@ -172,6 +191,8 @@ impl Debugger<'_> {
     }
 
     pub fn debug(&mut self) -> Result<(), RuntimeError> {
+        print!("{}", termion::clear::All);
+
         loop {
             self.print_state();
 
@@ -204,6 +225,12 @@ impl Debugger<'_> {
         }
 
         return Ok(());
+    }
+
+    fn clear_terminal(&self) {
+        print!("{}", termion::cursor::Goto(1, 1));
+        print!("{}", termion::clear::AfterCursor);
+        std::io::stdout().flush().unwrap();
     }
 }
 
@@ -284,19 +311,6 @@ fn join_cols(a: String, b: String) -> String {
     }
 
     return string;
-}
-
-fn clear_terminal() {
-    if cfg!(target_os = "windows") {
-        Command::new("cmd")
-            .args(&["/C", "cls"])
-            .status()
-            .expect("Failed to clear terminal");
-    } else {
-        Command::new("clear")
-            .status()
-            .expect("Failed to clear terminal");
-    }
 }
 
 fn string_width(string: &str) -> usize {
