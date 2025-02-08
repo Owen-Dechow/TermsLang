@@ -5,11 +5,12 @@ pub mod finterpretor;
 pub mod flat_ir;
 pub mod formmatter;
 pub mod lexer;
+mod lsp;
 pub mod parser;
 
 use clap::Parser;
 use errors::{FileLocation, ManagerError};
-use std;
+use lsp::lsp;
 
 fn main() {
     let args = cli::Args::parse();
@@ -20,7 +21,7 @@ fn main() {
                 let mut program = match std::fs::read_to_string(&file) {
                     Ok(program) => program,
                     Err(err) => {
-                        println!(
+                        eprintln!(
                             "{}",
                             ManagerError(
                                 format!("Could not open program file | {err}"),
@@ -77,12 +78,12 @@ fn main() {
                 println!("{}", err.prettify());
             }
         }
-        cli::Command::Format { file } => {
+        cli::Command::Format { file, to_stdout } => {
             let program = {
                 let mut program = match std::fs::read_to_string(&file) {
                     Ok(program) => program,
                     Err(err) => {
-                        println!(
+                        eprintln!(
                             "{}",
                             ManagerError(
                                 format!("Could not open program file. | {err}"),
@@ -99,17 +100,27 @@ fn main() {
 
             let text = formmatter::format(&program, 4);
 
-            if let Err(err) = std::fs::write(&file, text) {
-                println!(
-                    "{}",
-                    ManagerError(
-                        format!("Could not write to program file. | {err}"),
-                        FileLocation::None,
-                    )
-                    .prettify()
-                );
+            let to_stdout = match to_stdout {
+                Some(some) => *some,
+                None => false,
+            };
 
-                return;
+            match to_stdout {
+                true => println!("{}", text),
+                false => {
+                    if let Err(err) = std::fs::write(&file, text) {
+                        eprintln!(
+                            "{}",
+                            ManagerError(
+                                format!("Could not write to program file. | {err}"),
+                                FileLocation::None,
+                            )
+                            .prettify()
+                        );
+
+                        return;
+                    }
+                }
             }
         }
         cli::Command::Update => {
@@ -130,10 +141,51 @@ fn main() {
                         FileLocation::None,
                     );
 
-                    println!("{}", error.prettify());
+                    eprintln!("{}", error.prettify());
                     return;
                 }
             }
+        }
+        cli::Command::Lsp {
+            file,
+            line,
+            col,
+            run_parse,
+        } => {
+            let program = {
+                let mut program = match std::fs::read_to_string(&file) {
+                    Ok(program) => program,
+                    Err(err) => {
+                        eprintln!(
+                            "{}",
+                            ManagerError(
+                                format!("Could not open program file | {err}"),
+                                FileLocation::None
+                            )
+                            .prettify()
+                        );
+                        return;
+                    }
+                };
+                program.push(' ');
+                program
+            };
+
+            let lex_out = match lexer::lex(&program, false, &file, "", &[]) {
+                Ok(lex) => lex,
+                Err(err) => {
+                    eprintln!("{}", err.prettify());
+                    return;
+                }
+            };
+
+            let run_parse = match run_parse {
+                Some(some) => *some,
+                None => false,
+            };
+
+            let lsp = lsp(lex_out, file, *line, *col, run_parse);
+            println!("{}", lsp.json())
         }
     }
 }

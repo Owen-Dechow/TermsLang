@@ -2,7 +2,7 @@
 My FizzBuzz Program
 Created Fri Sep 6, 2024
 
-FizzbBuzz test program created for practice. 
+FizzbBuzz test program created for practice.
 - No command line arguments
 - No dependencies
 "
@@ -49,3 +49,4 @@ func null @main: str[] args {
     let int iters = fizzy.run.("Fizz", "Buzz") ~
     cll printResults.(iters) ~
 }
+

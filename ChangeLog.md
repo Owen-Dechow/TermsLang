@@ -1,6 +1,12 @@
 # TermsLang Version Log
 
-## Version 0.8.0
+## Version 0.8.1
+
+> February 7, 2025
+
+LSP
+
+## Version 0.8.1
 
 > February 1, 2025
 

@@ -36,10 +36,10 @@ macro_rules! prettify_macro {
 
                     // Loop over lines and add them to message
                     for (line_idx, line) in lines.enumerate() {
-                       let line_num = line_idx + start_line - offset_start;
-                       msg += &format!("\n{: >5}|", line_num + 1);
-                       
-                       if line_num == *start_line {
+                        let line_num = line_idx + start_line - offset_start;
+                        msg += &format!("\n{: >5}|", line_num + 1);
+
+                        if line_num == *start_line {
                             let start_col = if *start_col == 0 { 0 } else { start_col - 1 };
 
                             let good1 = &line[..start_col];
@@ -56,15 +56,15 @@ macro_rules! prettify_macro {
                             };
 
                             msg += &format!("{}{}{}", good1.green(), bad.red(), good2.green());
-                       } else if line_num == *end_line {
-                           let bad = &line[..*end_col];
-                           let good = &line[*end_col..];
-                           msg += &format!("{}{}", bad.red(), good.green())
-                       } else if line_num > *start_line && line_num < *end_line {
-                           msg += &format!("{}", line.red())
-                       } else {
-                           msg += &format!("{}", line.green())
-                       }
+                        } else if line_num == *end_line {
+                            let bad = &line[..*end_col];
+                            let good = &line[*end_col..];
+                            msg += &format!("{}{}", bad.red(), good.green())
+                        } else if line_num > *start_line && line_num < *end_line {
+                            msg += &format!("{}", line.red())
+                        } else {
+                            msg += &format!("{}", line.green())
+                        }
                     }
 
                     // Return pretty message
@@ -93,6 +93,30 @@ macro_rules! prettify_macro {
                     return msg;
                 }
             }
+        }
+
+        pub fn json(&self) -> String {
+            let mut json = String::from("{");
+
+            match &self.1 {
+                FileLocation::Loc {
+                    file,
+                    start_line,
+                    end_line,
+                    start_col,
+                    end_col,
+                } => {
+                    json += &format!(
+                        "\"loc\":\"{}:{start_line}:{start_col}-{end_line}:{end_col}\",",
+                        file.display()
+                    )
+                }
+                FileLocation::End { file } => json += &format!("\"loc\":\"{}\",", file.display()),
+                FileLocation::None => {}
+            };
+
+            json += &format!("\"msg\":{:?}}}", self.0);
+            return json;
         }
     };
 }

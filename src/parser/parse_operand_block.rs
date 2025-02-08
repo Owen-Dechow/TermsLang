@@ -93,6 +93,7 @@ fn parse_slice(
     mut slice: Vec<OperandComponent>,
     president_map: &Vec<Vec<Operator>>,
     file: &PathBuf,
+    loc: &FileLocation,
 ) -> Result<OperandExpression, ParserError> {
     let mut paren_depth = 0;
 
@@ -103,10 +104,23 @@ fn parse_slice(
     if slice.len() == 1 {
         match &slice[0] {
             OperandComponent::Literal(value) => {
-                return Ok(OperandExpression(OperandExpressionValue::Literal(value.clone()), value.1.clone()))
+                return Ok(OperandExpression(
+                    OperandExpressionValue::Literal(value.clone()),
+                    value.1.clone(),
+                ))
             }
-            OperandComponent::Object(value) => return Ok(OperandExpression(OperandExpressionValue::Object(value.clone()), value.loc.clone())),
-            OperandComponent::Create(value, loc) => return Ok(OperandExpression(OperandExpressionValue::Create(value.clone()), loc.clone())),
+            OperandComponent::Object(value) => {
+                return Ok(OperandExpression(
+                    OperandExpressionValue::Object(value.clone()),
+                    value.loc.clone(),
+                ))
+            }
+            OperandComponent::Create(value, loc) => {
+                return Ok(OperandExpression(
+                    OperandExpressionValue::Create(value.clone()),
+                    loc.clone(),
+                ))
+            }
             OperandComponent::Operand(token) => {
                 return Err(ParserError(
                     "Unexpected operator where value should be found".to_string(),
@@ -252,10 +266,18 @@ fn parse_slice(
                                     ));
                                 }
 
-                                return Ok(OperandExpression(OperandExpressionValue::Dot {
-                                    left: Box::new(parse_slice(left_slice, president_map, file)?),
-                                    right: right_object.clone(),
-                                }, operand_token.1.clone()));
+                                return Ok(OperandExpression(
+                                    OperandExpressionValue::Dot {
+                                        left: Box::new(parse_slice(
+                                            left_slice,
+                                            president_map,
+                                            file,
+                                            &operand_token.1,
+                                        )?),
+                                        right: right_object.clone(),
+                                    },
+                                    operand_token.1.clone(),
+                                ));
                             }
 
                             // Unary operators
@@ -277,14 +299,18 @@ fn parse_slice(
                                     ));
                                 }
 
-                                return Ok(OperandExpression(OperandExpressionValue::Unary {
-                                    operand: operand_token.clone(),
-                                    val: Box::new(parse_slice(
-                                        slice.into_iter().cloned().collect(),
-                                        president_map,
-                                        file,
-                                    )?),
-                                }, operand_token.1.clone()));
+                                return Ok(OperandExpression(
+                                    OperandExpressionValue::Unary {
+                                        operand: operand_token.clone(),
+                                        val: Box::new(parse_slice(
+                                            slice.into_iter().cloned().collect(),
+                                            president_map,
+                                            file,
+                                            &operand_token.1,
+                                        )?),
+                                    },
+                                    operand_token.1.clone(),
+                                ));
                             }
 
                             let slice_l = match slice.get(..operand_component_idx) {
@@ -321,19 +347,24 @@ fn parse_slice(
                                 ));
                             }
 
-                            return Ok(OperandExpression(OperandExpressionValue::Binary {
-                                operand: operand_token.clone(),
-                                left: Box::new(parse_slice(
-                                    slice_l.into_iter().cloned().collect(),
-                                    president_map,
-                                    file,
-                                )?),
-                                right: Box::new(parse_slice(
-                                    slice_r.into_iter().cloned().collect(),
-                                    president_map,
-                                    file,
-                                )?),
-                            }, operand_token.1.clone()));
+                            return Ok(OperandExpression(
+                                OperandExpressionValue::Binary {
+                                    operand: operand_token.clone(),
+                                    left: Box::new(parse_slice(
+                                        slice_l.into_iter().cloned().collect(),
+                                        president_map,
+                                        file,
+                                        &operand_token.1,
+                                    )?),
+                                    right: Box::new(parse_slice(
+                                        slice_r.into_iter().cloned().collect(),
+                                        president_map,
+                                        file,
+                                        &operand_token.1,
+                                    )?),
+                                },
+                                operand_token.1.clone(),
+                            ));
                         }
                     }
                 }
@@ -345,7 +376,7 @@ fn parse_slice(
         "Operand parse falls through".to_string(),
         match slice.last() {
             Some(OperandComponent::Operand(token)) => token.1.clone(),
-            _ => FileLocation::End { file: file.clone() },
+            _ => loc.clone(),
         },
     ));
 }
@@ -355,6 +386,7 @@ pub fn parse_operand_block(
     terminating_tokens: Vec<TokenType>,
     file: &PathBuf,
 ) -> Result<OperandExpression, ParserError> {
+    let mut loc;
     let operand_list = {
         let mut operand_list = Vec::<OperandComponent>::new();
         let mut parethese_layers = 1;
@@ -369,6 +401,8 @@ pub fn parse_operand_block(
                     ))
                 }
             };
+
+            loc = &token.1;
 
             if terminating_tokens.contains(&TokenType::Operator(Operator::CloseParen)) {
                 if token.0 == TokenType::Operator(Operator::OpenParen) {
@@ -410,7 +444,26 @@ pub fn parse_operand_block(
                     token_stream.back();
                     OperandComponent::Create(parse_object_create(token_stream, file)?, loc)
                 }
-                TokenType::Operator(_) => OperandComponent::Operand(token.clone()),
+                TokenType::Operator(
+                    Operator::Add
+                    | Operator::And
+                    | Operator::CloseParen
+                    | Operator::Divide
+                    | Operator::Dot
+                    | Operator::Equal
+                    | Operator::Exponent
+                    | Operator::Greater
+                    | Operator::GreaterOrEqual
+                    | Operator::Less
+                    | Operator::LessOrEqual
+                    | Operator::Modulo
+                    | Operator::Multiply
+                    | Operator::Not
+                    | Operator::NotEqual
+                    | Operator::OpenParen
+                    | Operator::Or
+                    | Operator::Subtract,
+                ) => OperandComponent::Operand(token.clone()),
                 _ => {
                     return Err(ParserError(
                         "Unexpected token in operand block".to_string(),
@@ -425,5 +478,5 @@ pub fn parse_operand_block(
         operand_list
     };
 
-    return parse_slice(operand_list, &get_precedent_map(), file);
+    return parse_slice(operand_list, &get_precedent_map(), file, loc);
 }

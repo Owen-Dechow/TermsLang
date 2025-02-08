@@ -4,7 +4,7 @@ repository = "https://github.com/Owen-Dechow/TermsLang"
 license-file = "LICENSE.md"
 description = "The terms programming language."
 name = "termslang"
-version = "0.8.1"
+version = "0.8.2"
 edition = "2021"
 
 

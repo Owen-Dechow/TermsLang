@@ -100,7 +100,8 @@ pub fn format(program: &String, indent_size: usize) -> String {
                         if !program_text.ends_with(|s| "+-=<>%*/! ".contains(s)) {
                             program_text.push(' ');
                         }
-                        program_text.push(ch)
+
+                        program_text.push(ch);
                     }
                     ']' => {
                         program_text.push(ch);
@@ -127,6 +128,12 @@ pub fn format(program: &String, indent_size: usize) -> String {
                         }
                     }
                     _ => {
+                        if program_text.ends_with(|s| "+-=<>%*/!".contains(s))
+                            && program_text.ends_with(|s| " ".contains(s))
+                        {
+                            program_text.push(' ');
+                        }
+
                         program_text.push(ch);
                     }
                 }

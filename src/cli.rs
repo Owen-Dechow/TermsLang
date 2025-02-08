@@ -36,8 +36,26 @@ pub enum Command {
     Format {
         #[arg(help = "File with valid syntax")]
         file: PathBuf,
+
+        #[arg(help = "Whether to send formats to stdout.")]
+        to_stdout: Option<bool>,
     },
 
     #[command(about = "Update TermsLang.")]
     Update,
+
+    #[command(about = "Get LSP info.")]
+    Lsp {
+        #[arg(help = "TermsLang File.")]
+        file: PathBuf,
+
+        #[arg(help = "Line to get variable info for.")]
+        line: usize,
+
+        #[arg(help = "Col to get variable info for.")]
+        col: usize,
+
+        #[arg(help = "Whether to run parsing.")]
+        run_parse: Option<bool>,
+    },
 }

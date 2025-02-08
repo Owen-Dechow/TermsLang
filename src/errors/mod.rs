@@ -1,6 +1,6 @@
+use colored::*;
 use std::fs;
 use std::path::PathBuf;
-use colored::*;
 
 #[macro_use]
 mod macros;
@@ -38,6 +38,12 @@ impl AParserError {
     prettify_macro! {"Active Parser Error"}
 }
 
+pub struct LspError(pub String, pub FileLocation);
+from_for_err_macro! {LspError}
+impl LspError {
+    prettify_macro! {"Lsp Error"}
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum FileLocation {
     Loc {
@@ -51,4 +57,16 @@ pub enum FileLocation {
         file: PathBuf,
     },
     None,
+}
+impl FileLocation {
+    pub fn start(&self) -> (usize, usize) {
+        match self {
+            FileLocation::Loc {
+                start_line,
+                start_col,
+                ..
+            } => (*start_line, *start_col),
+            _ => panic!(),
+        }
+    }
 }
