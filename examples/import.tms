@@ -1,11 +1,15 @@
 "
-Import keyword Test
+Import Keyword Example
+Created 2/8/2025
+
+Depends on examples/fib.tms
 "
 
 import fib of "fib.tms" ~
 
 func int @main: str[] args {
-    let int  out = fib.(10) ~
+    let int out = fib.(10) ~
     println out.@str.() ~
     return out ~
 }
+

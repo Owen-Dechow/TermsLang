@@ -70,3 +70,10 @@ impl FileLocation {
         }
     }
 }
+
+pub enum ErrorType {
+    Lsp(LspError),
+    Parser(ParserError),
+    AParser(AParserError),
+    Lexer(LexerError),
+}

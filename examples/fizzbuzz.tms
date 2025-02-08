@@ -2,13 +2,15 @@
 My FizzBuzz Program
 Created Fri Sep 6, 2024
 
-FizzbBuzz test program created for practice.
+FizzBuzz test program created for practice.
 - No command line arguments
 - No dependencies
 "
 
 struct FizzBuzz {
     let int iters ~
+
+    let int bob ~
 
     func null @new: int iters {
         updt @this.iters = iters ~

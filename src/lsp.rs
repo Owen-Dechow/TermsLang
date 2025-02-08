@@ -1,8 +1,8 @@
 use crate::{
     active_parser::{aparse, names},
-    errors::{AParserError, FileLocation, LexerError, LspError, ParserError},
+    errors::{ErrorType, FileLocation, LspError},
     lexer::tokens::{KeyWord, Operator, Token, TokenType},
-    parser::{parse, ErrType},
+    parser::parse,
 };
 use std::{collections::HashMap, path::PathBuf};
 
@@ -24,8 +24,10 @@ impl TS {
 }
 
 pub struct Lsp {
-    vars: Vec<HashMap<String, ((usize, usize), String)>>,
-    errors: Vec<ErrorType>,
+    pub vars: Vec<HashMap<String, ((usize, usize), String)>>,
+    pub errors: Vec<ErrorType>,
+    pub structs: HashMap<String, (usize, usize)>,
+    pub functions: HashMap<String, ((usize, usize), String)>,
 }
 
 impl Lsp {
@@ -83,7 +85,34 @@ impl Lsp {
             None => string,
         };
 
-        string += "]}";
+        string += "],\"functions\":{";
+
+        for func in self.functions {
+            string += &format!("\"{}\":{{", func.0);
+            string += &format!("\"line\":{},", func.1 .0 .0);
+            string += &format!("\"col\":{},", func.1 .0 .1);
+            string += &format!("\"type\":\"{}\"}},", func.1 .1);
+        }
+
+        string = match string.strip_suffix(',') {
+            Some(s) => s.to_string(),
+            None => string,
+        };
+
+        string += "},\"structs\":{";
+
+        for st in self.structs {
+            string += &format!("\"{}\":{{", st.0);
+            string += &format!("\"line\":{},", st.1 .0);
+            string += &format!("\"col\":{}}},", st.1 .1);
+        }
+
+        string = match string.strip_suffix(',') {
+            Some(s) => s.to_string(),
+            None => string,
+        };
+
+        string += "}}";
 
         return string;
     }
@@ -126,28 +155,30 @@ fn get_args(ts: &mut TS, lsp: &mut Lsp) -> Result<(), LspError> {
     return Ok(());
 }
 
-pub enum ErrorType {
-    Lsp(LspError),
-    Parser(ParserError),
-    AParser(AParserError),
-    Lexer(LexerError),
-}
-
 fn get_vars(ts: &mut TS, line: usize, col: usize) -> Result<Lsp, LspError> {
     let mut lsp = Lsp {
         vars: Vec::new(),
         errors: Vec::new(),
+        structs: HashMap::new(),
+        functions: HashMap::new(),
     };
 
-    while let Some(t) = ts.next() {
-        let (token, loc) = (&t.0, &t.1);
+    let mut in_struct: Option<String> = None;
+    let mut update_vars = true;
+    let mut final_vars = Vec::new();
 
-        let start = loc.start();
-        if start.0 > line {
-            break;
-        } else if start.0 == line {
-            if start.1 > col {
-                break;
+    while let Some(t) = ts.next() {
+        let (token, loc) = (&t.0, &t.1.start());
+
+        if update_vars {
+            if loc.0 > line {
+                update_vars = false;
+                final_vars = lsp.vars.clone();
+            } else if loc.0 == line {
+                if loc.1 > col {
+                    update_vars = false;
+                    final_vars = lsp.vars.clone();
+                }
             }
         }
 
@@ -162,8 +193,22 @@ fn get_vars(ts: &mut TS, line: usize, col: usize) -> Result<Lsp, LspError> {
         } else if let TokenType::KeyWord(KeyWord::Func) = token {
             lsp.vars.push(HashMap::new());
 
-            if let Some(_) = get_type(ts) {
-                if let Some(Token(TokenType::Identity(_), _)) = ts.next() {
+            if let Some(return_type) = get_type(ts) {
+                if let Some(Token(TokenType::Identity(name), loc)) = ts.next() {
+                    match in_struct {
+                        Some(ref struct_type) => {
+                            lsp.insert(
+                                names::THIS.to_string(),
+                                (loc.start(), struct_type.clone()),
+                                loc,
+                            )?;
+                        }
+                        None => {
+                            lsp.functions
+                                .insert(name.clone(), (loc.start(), return_type));
+                        }
+                    }
+
                     if let Some(Token(TokenType::Operator(Operator::Colon), _)) = ts.next() {
                         get_args(ts, &mut lsp)?;
                     }
@@ -171,6 +216,9 @@ fn get_vars(ts: &mut TS, line: usize, col: usize) -> Result<Lsp, LspError> {
             }
         } else if let TokenType::Operator(Operator::CloseBlock) = token {
             lsp.vars.pop();
+            if lsp.vars.len() == 0 {
+                in_struct = None;
+            }
         } else if let TokenType::KeyWord(KeyWord::If) = token {
             lsp.vars.push(HashMap::new());
 
@@ -186,10 +234,15 @@ fn get_vars(ts: &mut TS, line: usize, col: usize) -> Result<Lsp, LspError> {
                 lsp.insert(id.clone(), (loc.start(), names::INT.to_string()), loc)?;
             }
         } else if let TokenType::KeyWord(KeyWord::Struct) = token {
-            lsp.vars.push(HashMap::new());
+            if let Some(Token(TokenType::Identity(id), loc)) = ts.next() {
+                lsp.vars.push(HashMap::new());
+                in_struct = Some(id.clone());
+                lsp.structs.insert(id.clone(), loc.start());
+            }
         }
     }
 
+    lsp.vars = final_vars;
     return Ok(lsp);
 }
 
@@ -203,8 +256,9 @@ pub fn lsp(prog: Vec<Token>, file: &PathBuf, line: usize, col: usize, run_parse:
                 Err(err) => errors.push(ErrorType::AParser(err)),
             },
             Err(err) => match err {
-                ErrType::Parser(parser_error) => errors.push(ErrorType::Parser(parser_error)),
-                ErrType::Lexer(lexer_error) => errors.push(ErrorType::Lexer(lexer_error)),
+                ErrorType::Parser(parser_error) => errors.push(ErrorType::Parser(parser_error)),
+                ErrorType::Lexer(lexer_error) => errors.push(ErrorType::Lexer(lexer_error)),
+                _ => panic!(),
             },
         }
     }
@@ -220,6 +274,8 @@ pub fn lsp(prog: Vec<Token>, file: &PathBuf, line: usize, col: usize, run_parse:
             Lsp {
                 vars: Vec::new(),
                 errors,
+                structs: HashMap::new(),
+                functions: HashMap::new(),
             }
         }
     };

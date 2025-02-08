@@ -3,12 +3,15 @@ pub mod tokens;
 
 use std::{collections::HashMap, path::PathBuf};
 
-use crate::{errors::{FileLocation, LexerError}, active_parser::names::PREFIX_PROTECTED_NAMES};
+use crate::{
+    active_parser::names::PREFIX_PROTECTED_NAMES,
+    errors::{FileLocation, LexerError},
+};
 
 use self::{
     syntax::{
         get_syntax_map, SyntaxMap, COMMENT, DECIMAL, IGNORED_IN_NUMBERS, LINE_TERMINATOR, NEW_LINE,
-        STRING_QUOTES, VARIABLE_ALLOWED_EXTRA_CHARS,
+        STRING_QUOTES, VARIABLE_ALLOWED_EXTRA_CHARS_INTERNAL, VARIABLE_ALLOWED_EXTRA_CHARS_START,
     },
     tokens::{Operator, Token, TokenType},
 };
@@ -125,7 +128,7 @@ fn handle_char(
             }
 
             // Check for kewword or variable
-            if c.is_ascii_alphabetic() || VARIABLE_ALLOWED_EXTRA_CHARS.contains(c) {
+            if c.is_ascii_alphabetic() || VARIABLE_ALLOWED_EXTRA_CHARS_START.contains(c) {
                 section.state = SectionState::Word;
                 section.content.push(c);
                 return Ok(());
@@ -227,9 +230,13 @@ fn handle_char(
         // If state = Word (Variable or Kewword)
         SectionState::Word => {
             // Add letter to word
-            if c.is_alphanumeric() || VARIABLE_ALLOWED_EXTRA_CHARS.contains(c) {
+            if c.is_alphanumeric() || VARIABLE_ALLOWED_EXTRA_CHARS_INTERNAL.contains(c) {
                 section.content.push(c);
                 return Ok(());
+            }
+
+            if VARIABLE_ALLOWED_EXTRA_CHARS_START.contains(c) {
+                return Err(LexerError(format!("The character '{c}' is permitted at the start of an identity token but not within an identity token."), positioning.build()));
             }
 
             // Take ownership of word
@@ -254,7 +261,7 @@ fn handle_char(
 
                 let mut content = section.content.clone();
                 if !prefix_exclude.contains(&content) {
-                    if !PREFIX_PROTECTED_NAMES.contains(&content.as_str()) { 
+                    if !PREFIX_PROTECTED_NAMES.contains(&content.as_str()) {
                         content = format!("{}{}", id_prefix, content);
                     }
                 }

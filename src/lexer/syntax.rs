@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use super::tokens::{KeyWord, Operator};
 
 pub const DECIMAL: char = '.';
-pub const VARIABLE_ALLOWED_EXTRA_CHARS: &str = "@_";
+pub const VARIABLE_ALLOWED_EXTRA_CHARS_START: &str = "@_";
+pub const VARIABLE_ALLOWED_EXTRA_CHARS_INTERNAL: &str = "_";
 pub const COMMENT: char = '#';
 pub const NEW_LINE: char = '\n';
 pub const LINE_TERMINATOR: char = '~';

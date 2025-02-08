@@ -1,6 +1,10 @@
-""
+"
+Testing file for syntax and development
+Created 2/8/2025
+"
 
-struct B {}
+struct B {
+}
 
 struct A {
     let B b ~
@@ -13,3 +17,4 @@ struct A {
 func null @main: str[] args {
     let A a = $($() B) A ~
 }
+

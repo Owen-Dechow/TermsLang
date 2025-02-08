@@ -1,16 +1,18 @@
-pub mod active_parser;
-pub mod cli;
-pub mod errors;
-pub mod finterpretor;
-pub mod flat_ir;
-pub mod formmatter;
-pub mod lexer;
+mod active_parser;
+mod cli;
+mod errors;
+mod finterpretor;
+mod flat_ir;
+mod formmatter;
+mod lexer;
 mod lsp;
-pub mod parser;
+mod parser;
+
+use std::collections::HashMap;
 
 use clap::Parser;
-use errors::{FileLocation, ManagerError};
-use lsp::lsp;
+use errors::{ErrorType, FileLocation, ManagerError};
+use lsp::{lsp, Lsp};
 
 fn main() {
     let args = cli::Args::parse();
@@ -47,8 +49,9 @@ fn main() {
                 Ok(parse) => parse,
                 Err(err) => {
                     match err {
-                        parser::ErrType::Parser(err) => println!("{}", err.prettify()),
-                        parser::ErrType::Lexer(err) => println!("{}", err.prettify()),
+                        ErrorType::Parser(err) => println!("{}", err.prettify()),
+                        ErrorType::Lexer(err) => println!("{}", err.prettify()),
+                        _ => panic!(),
                     };
                     return;
                 }
@@ -174,7 +177,14 @@ fn main() {
             let lex_out = match lexer::lex(&program, false, &file, "", &[]) {
                 Ok(lex) => lex,
                 Err(err) => {
-                    eprintln!("{}", err.prettify());
+                    let lsp = Lsp {
+                        vars: Vec::new(),
+                        errors: vec![ErrorType::Lexer(err)],
+                        structs: HashMap::new(),
+                        functions: HashMap::new(),
+                    };
+
+                    println!("{}", lsp.json());
                     return;
                 }
             };

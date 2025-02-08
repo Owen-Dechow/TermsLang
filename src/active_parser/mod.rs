@@ -236,15 +236,6 @@ impl GlobalData {
     }
 }
 
-#[derive(Debug)]
-pub struct ARootTypeCollection {
-    pub int_type: Rc<AStruct>,
-    pub bool_type: Rc<AStruct>,
-    pub string_type: Rc<AStruct>,
-    pub float_type: Rc<AStruct>,
-    pub null_type: Rc<AStruct>,
-}
-
 struct DataScope<'a> {
     parent: Option<&'a DataScope<'a>>,
     vars: HashMap<String, Rc<RefCell<AType>>>,
@@ -319,7 +310,6 @@ impl<'a> DataScope<'a> {
 pub struct AProgram {
     pub structs: Vec<Rc<AStruct>>,
     pub functions: Vec<Rc<AFunc>>,
-    pub root_types: ARootTypeCollection,
 }
 
 #[derive(Debug)]
@@ -336,7 +326,7 @@ pub enum ATerm {
     },
     DeclareVar {
         name: String,
-        vartype: Rc<RefCell<AType>>,
+        _vartype: Rc<RefCell<AType>>,
         value: AOperandExpression,
     },
     Return {
@@ -688,7 +678,7 @@ impl AObject {
 
                     _ => {
                         return Err(AParserError(
-                            format!("{} is not a reconized method of vectors.", id),
+                            format!("{} is not a recognized method of vectors.", id),
                             object.loc.clone(),
                         ))
                     }
@@ -1230,7 +1220,7 @@ fn aparse_termblock(
 
                 ATerm::DeclareVar {
                     name: name.to_owned(),
-                    vartype,
+                    _vartype: vartype,
                     value: a_value,
                 }
             }
@@ -1617,17 +1607,7 @@ pub fn aparse(program: &Program) -> Result<AProgram, AParserError> {
         }
     }
 
-    let a_program = AProgram {
-        structs,
-        functions,
-        root_types: ARootTypeCollection {
-            int_type: gd.int_type,
-            bool_type: gd.bool_type,
-            string_type: gd.string_type,
-            float_type: gd.float_type,
-            null_type: gd.null_type,
-        },
-    };
+    let a_program = AProgram { structs, functions };
 
     Ok(a_program)
 }

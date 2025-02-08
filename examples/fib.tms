@@ -15,3 +15,4 @@ func null @main: str[] args {
     println fib.(35).@str.() ~
     let int a = 0 ~
 }
+

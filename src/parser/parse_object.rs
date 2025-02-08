@@ -11,7 +11,6 @@ use super::{
     Call, Object, ObjectCreate, ObjectType, TokenStream,
 };
 
-
 // Parse function call
 fn parse_call(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Call, ParserError> {
     match token_stream.advance() {
@@ -54,42 +53,6 @@ fn parse_call(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Call, Pa
     }
 
     return Ok(Call { args });
-}
-
-// Parse identity object Nonpeekable, Noncallable
-pub fn parse_object(token_stream: &mut TokenStream, file: &PathBuf) -> Result<Object, ParserError> {
-    match token_stream.advance().cloned() {
-        Some(token) => match token.0 {
-            TokenType::Identity(id) => match token_stream.advance() {
-                Some(Token(TokenType::Operator(Operator::Dot), pos)) => {
-                    return Err(ParserError(
-                        "Cannot peek, call, or index identity at this location".to_string(),
-                        pos.clone(),
-                    ));
-                }
-                _ => {
-                    token_stream.back();
-                    return Ok(Object {
-                        loc: token.1,
-                        kind: ObjectType::Identity(id),
-                        sub: None,
-                    });
-                }
-            },
-            _ => {
-                return Err(ParserError(
-                    "Unexpected token in place of identity".to_string(),
-                    token.1.clone(),
-                ))
-            }
-        },
-        None => {
-            return Err(ParserError(
-                "Expected identity".to_string(),
-                FileLocation::End { file: file.clone() },
-            ))
-        }
-    }
 }
 
 // Parse identity object Peekable, Noncallable
