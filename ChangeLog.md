@@ -2,6 +2,12 @@
 
 ## Version 0.8.2
 
+> February 15, 2025
+
+Windows Support
+
+## Version 0.8.2
+
 > February 8, 2025
 
 LSP/Errors
