@@ -1,6 +1,6 @@
 use crate::{errors::RuntimeError, flat_ir::CMD};
 use colored::Colorize;
-use std::io::{stdin, Write};
+use std::io::stdin;
 
 use super::Runner;
 
@@ -41,7 +41,8 @@ impl Debugger<'_> {
 
     fn print_state(&mut self) {
         self.clear_terminal();
-        let term_size = termion::terminal_size().unwrap();
+        let term_size = termsize::get().unwrap();
+        let term_size = (term_size.cols, term_size.rows);
 
         let min_width = 75;
         if term_size.0 < min_width {
@@ -191,7 +192,7 @@ impl Debugger<'_> {
     }
 
     pub fn debug(&mut self) -> Result<(), RuntimeError> {
-        print!("{}", termion::clear::All);
+        self.clear_terminal();
 
         loop {
             self.print_state();
@@ -228,9 +229,7 @@ impl Debugger<'_> {
     }
 
     fn clear_terminal(&self) {
-        print!("{}", termion::cursor::Goto(1, 1));
-        print!("{}", termion::clear::AfterCursor);
-        std::io::stdout().flush().unwrap();
+        let _ = clearscreen::clear();
     }
 }
 

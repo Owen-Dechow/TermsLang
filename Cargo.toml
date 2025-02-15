@@ -15,7 +15,8 @@ no-inline = []
 
 [dependencies]
 clap = { version = "4.5.9", features = ["derive"] }
+clearscreen = "4.0.1"
 colored = "2.1.0"
 rustc-hash = "1.1.0"
 slotmap = "1.0"
-termion = "1.5"
+termsize = "0.1.9"
