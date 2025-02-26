@@ -14,7 +14,7 @@ pub enum Value {
     Int(i32),
     Float(f32),
     Bool(bool),
-    Custom(FxHashMap<String, Value>),
+    Custom(FxHashMap<usize, Value>),
     Array(Vec<Value>),
     Null,
     Ptr(usize),
@@ -69,7 +69,7 @@ struct Runner<'a> {
     stack: Vec<Value>,
     refer_stack: Vec<usize>,
     prog: &'a FlatProgram,
-    scopes: FxHashMap<&'a String, Vec<Value>>,
+    scopes: Vec<Vec<Value>>,
     data: Data,
     gc: GlobalCounter,
 }
@@ -77,14 +77,15 @@ impl<'a> Runner<'a> {
     fn new(prog: &'a FlatProgram, args: &Vec<String>) -> Self {
         let data = Data::default();
         let gc = GlobalCounter::new();
-
         let args = args.into_iter().map(|x| Value::Str(x.clone())).collect();
+        let mut scopes = Vec::new();
+        scopes.resize(prog.n_scopes, Vec::new());
 
         Self {
             current_postion: prog.start_point,
             stack: vec![Value::Array(args)],
             refer_stack: Vec::new(),
-            scopes: FxHashMap::default(),
+            scopes,
             prog,
             gc,
             data,
@@ -105,13 +106,13 @@ impl<'a> Runner<'a> {
     }
 
     #[cfg_attr(not(feature = "no-inline"), inline(always))]
-    fn get_var(&self, var: &String) -> &Value {
+    fn get_var(&self, var: usize) -> &Value {
         self.scopes[var].last().unwrap()
     }
 
     #[cfg_attr(not(feature = "no-inline"), inline(always))]
-    fn set_var(&mut self, var: &[String], new: Value) {
-        let scope = self.scopes.get_mut(&var[0]).unwrap();
+    fn set_var(&mut self, var: &[usize], new: Value) {
+        let scope = self.scopes.get_mut(var[0]).unwrap();
 
         let to = match scope.last_mut().unwrap() {
             Value::Custom(hash_map) => {
@@ -136,7 +137,7 @@ impl<'a> Runner<'a> {
         self.set_var_mut_on_obj(to, &var[1..], new);
     }
 
-    fn set_var_mut_on_obj(&mut self, obj: usize, var: &[String], new: Value) {
+    fn set_var_mut_on_obj(&mut self, obj: usize, var: &[usize], new: Value) {
         let obj = &mut self.data.get_mut(&obj).0;
 
         let to = match obj {
@@ -596,14 +597,14 @@ impl<'a> Runner<'a> {
     }
 
     #[cfg_attr(not(feature = "no-inline"), inline(always))]
-    fn release(&mut self, nms: &Vec<String>) {
+    fn release(&mut self, nms: &Vec<usize>) {
         let reserve = match self.stack.last() {
             Some(Value::Ptr(to)) => *to,
             _ => 0,
         };
 
         for nm in nms {
-            let key = self.scopes.get_mut(nm).unwrap().pop().unwrap();
+            let key = self.scopes.get_mut(*nm).unwrap().pop().unwrap();
             if let Value::Ptr(key) = key {
                 let data = self.data.get_mut(&key);
                 data.1 -= 1;
@@ -660,7 +661,7 @@ impl<'a> Runner<'a> {
                     self.current_postion += 1;
                 }
                 VarAdress::Var(var) => {
-                    let v = self.get_var(var);
+                    let v = self.get_var(*var);
                     self.stack.push(v.clone());
                     self.current_postion += 1;
                 }
@@ -681,10 +682,10 @@ impl<'a> Runner<'a> {
                     self.data.get_mut(&to).1 += 1;
                 }
 
-                match self.scopes.get_mut(n) {
+                match self.scopes.get_mut(*n) {
                     Some(lst) => lst.push(v),
                     None => {
-                        self.scopes.insert(n, vec![v]);
+                        self.scopes.insert(*n, vec![v]);
                     }
                 }
 

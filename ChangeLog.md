@@ -1,6 +1,12 @@
 # TermsLang Version Log
 
-## Version 0.8.2
+## Version 0.8.4
+
+> February 15, 2025
+
+`usize` Variable Refs
+
+## Version 0.8.3
 
 > February 15, 2025
 

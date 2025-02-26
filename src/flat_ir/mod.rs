@@ -16,6 +16,7 @@ struct ProgramBuilder {
     non_indexed_refers: Vec<(usize, u32)>,
     non_indexed_loops: Vec<Vec<usize>>,
     debug: bool,
+    name_converter: VNameConverter,
 }
 impl ProgramBuilder {
     fn new(debug: bool) -> Self {
@@ -26,6 +27,7 @@ impl ProgramBuilder {
             non_indexed_refers: Vec::new(),
             non_indexed_loops: Vec::new(),
             debug,
+            name_converter: VNameConverter::new(),
         }
     }
 
@@ -42,7 +44,7 @@ impl ProgramBuilder {
         &mut self,
         defer_count: &mut u32,
         release_count: &mut Vec<u32>,
-        scopes: &mut Vec<Vec<String>>,
+        scopes: &mut Vec<Vec<usize>>,
         debug: bool,
     ) {
         if debug {
@@ -58,11 +60,17 @@ impl ProgramBuilder {
         scopes.push(Vec::new());
     }
 
+    fn add_let(&mut self, name: &str) -> usize {
+        let idx = self.name_converter.convert(name);
+        self.tape.push(CMD::Let(idx));
+        return idx;
+    }
+
     fn release_scope(
         &mut self,
         defer_count: &mut u32,
         release_count: &mut Vec<u32>,
-        scopes: &mut Vec<Vec<String>>,
+        scopes: &mut Vec<Vec<usize>>,
         n: u32,
         stop_tracking: bool,
     ) {
@@ -90,27 +98,51 @@ impl ProgramBuilder {
 
 #[derive(Debug)]
 pub enum VarAdress {
-    Index(String),
-    Var(String),
+    Index(usize),
+    Var(usize),
+}
+
+pub struct VNameConverter {
+    name_map: HashMap<String, usize>,
+    idx: usize,
+}
+impl VNameConverter {
+    fn new() -> VNameConverter {
+        VNameConverter {
+            idx: 0,
+            name_map: HashMap::new(),
+        }
+    }
+
+    fn convert(&mut self, name: &str) -> usize {
+        match self.name_map.get(name) {
+            Some(idx) => *idx,
+            None => {
+                self.name_map.insert(name.to_string(), self.idx);
+                self.idx += 1;
+                return self.idx - 1;
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
 pub enum CMD {
     SplitScope,
-    Release(Vec<String>),
+    Release(Vec<usize>),
     TRelease,
     Defer,
     Jump(usize),
     Push(VarAdress),
     Print,
     PrintLn,
-    Let(String),
-    Update(Vec<String>),
+    Let(usize),
+    Update(Vec<usize>),
     XIf,
     Refer(usize),
     InternalOp(String, FileLocation),
     PushLit(Value),
-    PushObj(Vec<String>),
+    PushObj(Vec<usize>),
     PushVec,
     Burn,
 }
@@ -118,6 +150,7 @@ pub enum CMD {
 pub struct FlatProgram {
     pub tape: Vec<CMD>,
     pub start_point: usize,
+    pub n_scopes: usize,
 }
 
 fn add_block(
@@ -125,7 +158,7 @@ fn add_block(
     block: &ATermBlock,
     defer_count: &mut u32,
     release_count: &mut Vec<u32>,
-    scopes: &mut Vec<Vec<String>>,
+    scopes: &mut Vec<Vec<usize>>,
     post_split_cmds: Option<Vec<CMD>>,
     push_this: bool,
 ) {
@@ -134,7 +167,7 @@ fn add_block(
     if let Some(cmds) = post_split_cmds {
         for cmd in cmds {
             if let CMD::Let(ref nm) = cmd {
-                scopes.last_mut().unwrap().push(nm.clone());
+                scopes.last_mut().unwrap().push(*nm);
             }
 
             pb.push(cmd);
@@ -151,7 +184,8 @@ fn add_block(
     }
 
     if push_this {
-        pb.push(CMD::Push(VarAdress::Var(nms::THIS.to_string())));
+        let idx = pb.name_converter.convert(nms::THIS);
+        pb.push(CMD::Push(VarAdress::Var(idx)));
     }
 
     if pb.debug {
@@ -161,13 +195,13 @@ fn add_block(
     pb.release_scope(defer_count, release_count, scopes, 1, true);
 }
 
-fn peek_reduct(object: &AObject, reduct: &mut Vec<String>) {
+fn peek_reduct(object: &AObject, reduct: &mut Vec<usize>, pb: &mut ProgramBuilder) {
     match &object.kind {
         AObjectType::Identity(id) => {
-            reduct.push(id.clone());
+            reduct.push(pb.name_converter.convert(id));
 
             if let Some(obj) = &object.sub {
-                peek_reduct(&obj, reduct)
+                peek_reduct(&obj, reduct, pb)
             }
         }
         _ => panic!(),
@@ -180,14 +214,16 @@ fn add_object(pb: &mut ProgramBuilder, object: &AObject, parent: Option<&AObject
             match &*object._type.borrow() {
                 AType::ArrayObject(..) | AType::StructObject(..) => match parent {
                     Some(_) => {
-                        pb.push(CMD::Push(VarAdress::Index(id.clone())));
+                        let idx = pb.name_converter.convert(id);
+                        pb.push(CMD::Push(VarAdress::Index(idx)));
 
                         if let Some(sub) = &object.sub {
                             add_object(pb, &sub, Some(object));
                         }
                     }
                     None => {
-                        pb.push(CMD::Push(VarAdress::Var(id.clone())));
+                        let idx = pb.name_converter.convert(id);
+                        pb.push(CMD::Push(VarAdress::Var(idx)));
 
                         if let Some(sub) = &object.sub {
                             add_object(pb, &sub, Some(object));
@@ -257,7 +293,13 @@ fn add_operand_block(pb: &mut ProgramBuilder, block: &AOperandExpression) {
             }
             AType::StructDefRef(_t) => match _t.root {
                 false => {
-                    pb.push(CMD::PushObj(_t.fields.keys().map(|x| x.clone()).collect()));
+                    let fields = _t
+                        .fields
+                        .keys()
+                        .map(|x| pb.name_converter.convert(x))
+                        .collect();
+                    pb.push(CMD::PushObj(fields));
+
                     if let Some(afunc) = _t.methods.get(nms::F_NEW) {
                         let child = AObject {
                             kind: AObjectType::Call(ACall {
@@ -292,7 +334,7 @@ fn add_term(
     term: &ATerm,
     defer_count: &mut u32,
     release_count: &mut Vec<u32>,
-    scopes: &mut Vec<Vec<String>>,
+    scopes: &mut Vec<Vec<usize>>,
 ) {
     match term {
         ATerm::Print { ln, value } => {
@@ -304,8 +346,8 @@ fn add_term(
         }
         ATerm::DeclareVar { name, value, .. } => {
             add_operand_block(pb, value);
-            pb.push(CMD::Let(name.clone()));
-            scopes.last_mut().unwrap().push(name.clone());
+            let idx = pb.add_let(name);
+            scopes.last_mut().unwrap().push(idx);
         }
         ATerm::Return { value } => {
             add_operand_block(pb, value);
@@ -315,7 +357,8 @@ fn add_term(
         ATerm::UpdateVar { value, var } => {
             add_operand_block(pb, value);
             let mut vec = Vec::new();
-            peek_reduct(var, &mut vec);
+            peek_reduct(var, &mut vec, pb);
+
             pb.push(CMD::Update(vec));
         }
         ATerm::If {
@@ -360,17 +403,21 @@ fn add_term(
         } => {
             pb.split_scope(defer_count, release_count, scopes, pb.debug);
             pb.push(CMD::PushLit(Value::Int(-1)));
-            pb.push(CMD::Let(counter.clone()));
-            scopes.last_mut().unwrap().push(counter.clone());
+            let idx = pb.add_let(&counter);
+            scopes.last_mut().unwrap().push(idx);
 
             let loop_start = pb.len();
 
             release_count.push(0);
 
             pb.push(CMD::PushLit(Value::Int(1)));
-            pb.push(CMD::Push(VarAdress::Var(counter.clone())));
+
+            let idx = pb.name_converter.convert(&counter);
+            pb.push(CMD::Push(VarAdress::Var(idx)));
             pb.push(CMD::InternalOp(nms::F_ADD.to_string(), FileLocation::None));
-            pb.push(CMD::Update(vec![counter.clone()]));
+
+            let idx = pb.name_converter.convert(&counter);
+            pb.push(CMD::Update(vec![idx]));
             add_operand_block(pb, conditional);
             pb.push(CMD::XIf);
             pb.non_indexed_loops.push(vec![pb.len()]);
@@ -431,12 +478,12 @@ fn add_function(pb: &mut ProgramBuilder, func: &AFunc, push_this: bool, return_t
 
     let mut post_split_cmds: Vec<CMD> = (&func.args)
         .into_iter()
-        .map(|a| CMD::Let(a.name.clone()))
+        .map(|a| CMD::Let(pb.name_converter.convert(&a.name)))
         .rev()
         .collect();
 
     if push_this {
-        post_split_cmds.push(CMD::Let(nms::THIS.to_string()));
+        post_split_cmds.push(CMD::Let(pb.name_converter.convert(nms::THIS)));
     }
 
     let mut scopes = Vec::new();
@@ -488,5 +535,6 @@ pub fn flatten(program: &AProgram, debug: bool) -> FlatProgram {
     return FlatProgram {
         tape: pb.tape,
         start_point: pb.main_function,
+        n_scopes: pb.name_converter.idx + 1,
     };
 }

@@ -169,7 +169,7 @@ impl Debugger<'_> {
     fn get_scopes_string(&self) -> String {
         let mut string = String::new();
 
-        for (key, ptrs) in &self.runner.scopes {
+        for (key, ptrs) in self.runner.scopes.iter().enumerate() {
             string += &format!("{}:\n", key);
             for ptr in ptrs.into_iter().rev().enumerate() {
                 string += &format!(" {:?}", ptr.1);

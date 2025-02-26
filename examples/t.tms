@@ -3,18 +3,12 @@ Testing file for syntax and development
 Created 2/8/2025
 "
 
-struct B {
-}
-
 struct A {
-    let B b ~
-
-    func null @new: B b {
-        updt @this.b = b ~
-    }
+    let str a ~
 }
 
 func null @main: str[] args {
-    let A a = $($() B) A ~
+    let A a = $() A ~
+    println a.a ~
 }
 
