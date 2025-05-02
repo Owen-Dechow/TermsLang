@@ -1,6 +1,8 @@
 mod data;
-mod debugger;
 use std::io::stdin;
+
+#[cfg(feature = "debugger")]
+mod debugger;
 
 use crate::active_parser::names as nms;
 use crate::errors::{FileLocation, RuntimeError};
@@ -750,7 +752,16 @@ pub fn interpret(
 ) -> Result<(), RuntimeError> {
     let mut runner = Runner::new(program, args);
     match debug {
-        true => debugger::Debugger::new(runner).debug(),
+        true => {
+            #[cfg(feature = "debugger")]
+            return debugger::Debugger::new(runner).debug();
+
+            #[cfg(not(feature = "debugger"))]
+            return Err(RuntimeError(
+                format!("Debugger not installed."),
+                FileLocation::None,
+            ));
+        }
         false => runner.run(),
     }
 }

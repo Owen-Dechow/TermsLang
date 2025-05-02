@@ -108,8 +108,8 @@ macro_rules! prettify_macro {
                 } => {
                     json += &format!(
                         "\"loc\":\"{}:{start_line}:{start_col}-{end_line}:{end_col}\",",
-                        file.display()
-                    )
+                        file.display().to_string().replace('\\', "\\\\")
+                    );
                 }
                 FileLocation::End { file } => json += &format!("\"loc\":\"{}\",", file.display()),
                 FileLocation::None => {}
