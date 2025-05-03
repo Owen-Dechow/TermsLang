@@ -30,6 +30,10 @@ pub struct RuntimeError(pub String, pub FileLocation);
 from_for_err_macro! {RuntimeError}
 impl RuntimeError {
     prettify_macro! {"Runtime Error"}
+
+    pub fn null(loc: FileLocation) -> Self {
+        Self("Null Refrance Exception".to_string(), loc)
+    }
 }
 
 pub struct AParserError(pub String, pub FileLocation);

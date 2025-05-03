@@ -27,6 +27,7 @@ impl DataH {
     }
 
     #[cfg_attr(not(feature = "no-inline"), inline(always))]
+    #[cfg(feature = "debugger")]
     pub fn get_valid_data(&self) -> Vec<(&usize, &Cell)> {
         (&self.0).into_iter().collect()
     }

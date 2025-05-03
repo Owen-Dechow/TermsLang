@@ -1,5 +1,11 @@
 # TermsLang Version Log
 
+## Version 0.8.5
+
+> May 3, 2025
+
+Null value errors
+
 ## Version 0.8.4
 
 > February 15, 2025

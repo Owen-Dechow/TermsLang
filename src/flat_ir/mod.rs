@@ -134,11 +134,11 @@ pub enum CMD {
     Defer,
     Jump(usize),
     Push(VarAdress),
-    Print,
-    PrintLn,
+    Print(FileLocation),
+    PrintLn(FileLocation),
     Let(usize),
     Update(Vec<usize>),
-    XIf,
+    XIf(FileLocation),
     Refer(usize),
     InternalOp(String, FileLocation),
     PushLit(Value),
@@ -340,8 +340,8 @@ fn add_term(
         ATerm::Print { ln, value } => {
             add_operand_block(pb, value);
             pb.push(match ln {
-                true => CMD::PrintLn,
-                false => CMD::Print,
+                true => CMD::PrintLn(value.loc.clone()),
+                false => CMD::Print(value.loc.clone()),
             });
         }
         ATerm::DeclareVar { name, value, .. } => {
@@ -367,7 +367,7 @@ fn add_term(
             else_block,
         } => {
             add_operand_block(pb, conditional);
-            pb.push(CMD::XIf);
+            pb.push(CMD::XIf(conditional.loc.clone()));
             let else_gt = pb.push(CMD::Jump(0));
             add_block(pb, block, defer_count, release_count, scopes, None, false);
             let if_gt = pb.push(CMD::Jump(0));
@@ -419,7 +419,7 @@ fn add_term(
             let idx = pb.name_converter.convert(&counter);
             pb.push(CMD::Update(vec![idx]));
             add_operand_block(pb, conditional);
-            pb.push(CMD::XIf);
+            pb.push(CMD::XIf(conditional.loc.clone()));
             pb.non_indexed_loops.push(vec![pb.len()]);
             pb.push(CMD::Jump(1));
             add_block(pb, block, defer_count, release_count, scopes, None, false);

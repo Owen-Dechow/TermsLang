@@ -23,28 +23,39 @@ pub enum Value {
 }
 impl Value {
     #[cfg_attr(not(feature = "no-inline"), inline(always))]
-    fn string<'a>(&'a self, runner: &'a Runner) -> &'a String {
+    fn string<'a>(
+        &'a self,
+        runner: &'a Runner,
+        loc: &FileLocation,
+    ) -> Result<&'a String, RuntimeError> {
         match self {
-            Value::Str(string) => string,
-            Value::Ptr(to) => runner.data[to].0.string(runner),
+            Value::Str(string) => Ok(string),
+            Value::Ptr(to) => runner.data[to].0.string(runner, loc),
+            Value::Null => return Err(RuntimeError::null(loc.clone())),
             _ => panic!(),
         }
     }
 
     #[cfg_attr(not(feature = "no-inline"), inline(always))]
-    fn bool<'a>(&'a self, runner: &'a Runner) -> &'a bool {
+    fn bool<'a>(
+        &'a self,
+        runner: &'a Runner,
+        loc: &FileLocation,
+    ) -> Result<&'a bool, RuntimeError> {
         match self {
-            Value::Bool(b) => b,
-            Value::Ptr(to) => runner.data[to].0.bool(runner),
+            Value::Bool(b) => Ok(b),
+            Value::Ptr(to) => runner.data[to].0.bool(runner, loc),
+            Value::Null => return Err(RuntimeError::null(loc.clone())),
             _ => panic!(),
         }
     }
 
     #[cfg_attr(not(feature = "no-inline"), inline(always))]
-    fn int<'a>(&'a self, runner: &'a Runner) -> &'a i32 {
+    fn int<'a>(&'a self, runner: &'a Runner, loc: &FileLocation) -> Result<&'a i32, RuntimeError> {
         match self {
-            Value::Int(i) => i,
-            Value::Ptr(to) => &runner.data[to].0.int(runner),
+            Value::Int(i) => Ok(i),
+            Value::Ptr(to) => runner.data[to].0.int(runner, loc),
+            Value::Null => return Err(RuntimeError::null(loc.clone())),
             _ => panic!(),
         }
     }
@@ -446,7 +457,7 @@ impl<'a> Runner<'a> {
 
                 match bb {
                     Value::Array(arr) => {
-                        let idx = *aa.int(self);
+                        let idx = *aa.int(self, loc)?;
                         let arr_len = arr.len() as i32;
 
                         if idx < 0 || idx + 1 > arr_len {
@@ -493,7 +504,7 @@ impl<'a> Runner<'a> {
             }
             nms::F_REMOVE => {
                 let a = self.stack_pop();
-                let idx = *self.reduct(&a).clone().int(self);
+                let idx = *self.reduct(&a).clone().int(self, loc)?;
 
                 let mut b = self.stack_pop();
                 let bb = self.mut_reduct(&mut b);
@@ -668,14 +679,14 @@ impl<'a> Runner<'a> {
                     self.current_postion += 1;
                 }
             },
-            CMD::Print => {
+            CMD::Print(loc) => {
                 let v = self.stack_pop();
-                print!("{}", v.string(self));
+                print!("{}", v.string(self, loc)?);
                 self.current_postion += 1;
             }
-            CMD::PrintLn => {
+            CMD::PrintLn(loc) => {
                 let v = self.stack_pop();
-                println!("{}", v.string(self));
+                println!("{}", v.string(self, loc)?);
                 self.current_postion += 1;
             }
             CMD::Let(n) => {
@@ -693,7 +704,7 @@ impl<'a> Runner<'a> {
 
                 self.current_postion += 1;
             }
-            CMD::XIf => match self.stack_pop().bool(self) {
+            CMD::XIf(loc) => match self.stack_pop().bool(self, loc)? {
                 true => self.current_postion += 2,
                 false => self.current_postion += 1,
             },
