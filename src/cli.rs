@@ -23,7 +23,7 @@ pub enum Command {
         args: Vec<String>,
     },
 
-    #[command(about = "Run a program.")]
+    #[command(about = "Run line by line. [Must have debug feature]")]
     Debug {
         #[arg(help = "File containing entry function.")]
         file: PathBuf,

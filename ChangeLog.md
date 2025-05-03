@@ -1,5 +1,11 @@
 # TermsLang Version Log
 
+## Version 0.8.6
+
+> May 3, 2025
+
+Debugger feature
+
 ## Version 0.8.5
 
 > May 3, 2025

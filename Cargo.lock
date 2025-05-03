@@ -376,7 +376,7 @@ dependencies = [
 
 [[package]]
 name = "termslang"
-version = "0.8.5"
+version = "0.8.6"
 dependencies = [
  "clap",
  "clearscreen",

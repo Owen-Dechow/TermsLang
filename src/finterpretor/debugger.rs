@@ -204,15 +204,15 @@ impl Debugger<'_> {
             }
 
             if !self.complete {
-                match self.runner.prog.tape[self.runner.current_postion] {
-                    CMD::Print => {
+                match &self.runner.prog.tape[self.runner.current_postion] {
+                    CMD::Print(loc) => {
                         let v = self.runner.stack_pop();
-                        self.debug_out += v.string(&self.runner);
+                        self.debug_out += v.string(&self.runner, loc)?;
                         self.runner.current_postion += 1;
                     }
-                    CMD::PrintLn => {
+                    CMD::PrintLn(loc) => {
                         let v = self.runner.stack_pop();
-                        self.debug_out += v.string(&self.runner);
+                        self.debug_out += v.string(&self.runner, loc)?;
                         self.debug_out += "\n";
                         self.runner.current_postion += 1;
                     }
